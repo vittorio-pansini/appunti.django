@@ -1,0 +1,2138 @@
+*************************************************************
+ Appendice B - Built-in template tags e filtri [Django 3.1 ]
+               [0.0.0]
+*************************************************************
+
+Questo documento descrive i tag e i filtri dei modelli incorporati di Django. Si consiglia di utilizzare la documentazione automatica, se disponibile, poiché includerà anche la documentazione per eventuali tag o filtri personalizzati installati.
+
+Maggiori informazioni sui Builtins Tag Templates di Django 3.1 possono essere reperite sull'URL...
+	https://docs.djangoproject.com/en/3.1/ref/templates/builtins/
+
+
+
+==============
+ Built-in tag
+==============
+
+
+------------
+ autoescape
+------------
+
+Controlla il comportamento di escaping automatico corrente. Questo tag accetta  on  o  off  come argomento e ciò determina se l'escape automatico è attivo all'interno del blocco. Il blocco viene chiuso con il tag  endautoescape
+
+Quando è attivo l'escaping automatico, a tutto il contenuto variabile viene applicato l'escape HTML prima di inserire il risultato nell'output (ma dopo che sono stati applicati i filtri). Ciò equivale ad applicare manualmente il filtro escape a ciascuna variabile.
+
+Le uniche eccezioni sono le variabili che sono già contrassegnate come "sicure" dall'escape, sia dal codice che ha popolato la variabile, sia perché sono stati applicati i filtri  safe  o  escape
+
+Esempio:
+
+	{% autoescape on %}
+		{{ body }}
+	{% endautoescape %}
+
+
+-------
+ block 
+-------
+
+Definisce un blocco che può essere sovrascritto dai template figlio. Vedere Ereditarietà dei modelli per ulteriori informazioni.
+
+
+---------
+ comment
+---------
+
+Ignora tutto ciò che è compreso fra {% comment %} e {% endcomment %}.  Una nota opzionale può essere inserita nel primo tag. Ad esempio, ciò è utile quando si commenta il codice per documentare il motivo per cui il codice è stato disabilitato.
+
+Esempio:
+
+	<p> Rendered text with {{ pub_date|date:"c" }} </p>
+	{% comment "Optional note" %}
+		<p> Commented out text with {{ create_date|date:"c" }} </p>
+	{% endcomment %}
+
+I tag comment non possono essere nidificati.
+
+
+------------
+ csrf_token
+------------
+
+Questo tag viene utilizzato per gestire la protezione CSRF, come descritto nella documentazione "Cross Site Request Forgeries":
+
+	https://docs.djangoproject.com/en/3.1/ref/csrf/
+
+
+-------
+ cycle
+-------
+
+Produce uno dei suoi argomenti ogni volta che viene incontrato questo tag. Il primo argomento viene prodotto sul primo incontro, il secondo sul secondo incontro e così via. Una volta che tutti gli argomenti sono esauriti, il tag passa al primo argomento e lo produce di nuovo.
+
+Questo tag è particolarmente utile in un ciclo. Esempio:
+
+	{% for o in some_list %}
+		<tr class="{% cycle 'row1' 'row2' %}">
+			...
+		</tr>
+	{% endfor %}
+
+La prima iterazione produce un HTML che fa riferimento alla classe row1, la seconda a row2, la terza di row1 di nuovo e così via per ogni iterazione del ciclo.
+
+Possono essere anche usate le variabili. Ad esempio, se abbiamo due variabili di template rowvalue1 e rowvalue2, possiamo alternare i loro valori in questo modo:
+
+	{% for o in some_list %}
+		<tr class="{% cycle rowvalue1 rowvalue2 %}">
+			...
+		</tr>
+	{% endfor %}
+
+Le variabili incluse nel ciclo verranno ignorate. Possiamo disabilitare l'escape automatico con:
+
+	{% for o in some_list %}
+		<tr class="{% autoescape off %}{% cycle rowvalue1 rowvalue2 %}{% endautoescape %}">
+			...
+		</tr>
+	{% endfor %}
+
+Possiamo fare un mix fra variabili e stringhe:
+
+	{% for o in some_list %}
+		<tr class="{% cycle 'row1' rowvalue2 'row3' %}">
+			...
+		</tr>
+	{% endfor %}
+
+In alcuni casi potremmo voler fare riferimento al valore corrente di un ciclo senza passare al valore successivo. Per fare ciò, assegniamo un nome al tag, utilizzando "as", in questo modo:
+
+	{% cycle 'row1' 'row2' as rowcolors %}
+
+Da quel momento in poi, possiamo inserire il valore corrente del ciclo dove preferiamo nel template facendo riferimento al nome del ciclo come variabile di contesto.  Se vogliamo spostare il ciclo al valore successivo indipendentemente dal tag cycle originale, possiamo utilizzare un altro tag cycle e specificare il nome della variabile. Quindi, il seguente template...
+
+	<tr>
+		<td class="{% cycle 'row1' 'row2' as rowcolors %}">...</td>
+		<td class="{{ rowcolors }}">...</td>
+	</tr>
+	<tr>
+		<td class="{% cycle rowcolors %}">...</td>
+		<td class="{{ rowcolors }}">...</td>
+	</tr>
+
+... produrrebbe ...
+
+	<tr>
+		<td class="row1">...</td>
+		<td class="row1">...</td>
+	</tr>
+	<tr>
+		<td class="row2">...</td>
+		<td class="row2">...</td>
+	</tr>
+	
+Possiamo utilizzare qualsiasi numero di valori in un tag cycle, separati da spazi. I valori racchiusi tra virgolette singole (') o virgolette doppie (") sono trattati come stringhe, mentre i valori senza virgolette sono trattati come variabili del template.
+
+Per default, quando si utilizza la parola chiave "as" con il tag cycle, l'uso di {% cycle %} che avvia il ciclo produrrà esso stesso il primo valore nel ciclo. Questo potrebbe essere un problema se si desidera utilizzare il valore in un ciclo annidato o in un template incluso. 
+
+Se vogliamo solo dichiarare il ciclo ma non produrre il primo valore, possiamo aggiungere la parola chiave "silent" come ultima parola chiave nel tag.
+
+Esempio:
+
+	{% for obj in some_list %}
+		{% cycle 'row1' 'row2' as rowcolors silent %}
+		<tr class="{{ rowcolors }}">{% include "subtemplate.html" %}</tr>
+	{% endfor %}
+
+Questo produrrà un elenco di elementi <tr> con una alternanza di classi fra row1 e row2. Il subtemplate avrà accesso a rowcolors nel suo contesto e il valore corrisponderà alla classe del <tr> che lo racchiude. Se la parola chiave silent dovesse essere omessa row1 e row2 sarebbero emesse come testo normale, al di fuori dell'elemento <tr>.
+
+Quando la parola chiave silent viene utilizzata su una definizione di ciclo, silent si applica automaticamente a tutti gli usi successivi di quella specifica tag del ciclo. Il seguente template non restituirà nulla, anche se la seconda chiamata a {% cycle %} non specifica silent:
+
+	{% cycle 'row1' 'row2' as rowcolors silent %}
+	
+	{% cycle rowcolors %}
+
+Possiamo usare il tag resetcycle per fare in modo che {% cycle %} ricominci dal primo valore quando viene incontrato di nuovo.
+
+
+-------
+ debug
+-------
+
+Crea una serie di informazioni di debugging, incluso il contesto e i moduli importati.
+
+
+---------
+ extends
+---------
+
+Segnala che questo template estende un template padre.
+
+Questo tag può essere usato in due modi:
+
+	{% extends "base.html" %} 
+
+... con le virgolette, usa il nome "base.html" come nome del template esteso.
+
+	{% extends variable %} 
+
+... usa il valore della variabile. Se la variabile contiene una stringa, Django userà la stringa come nome del parent template. Se la variabile contiene un oggetto template, Django userà quell'oggetto come parent template.
+
+Vedasi l'articolo sull'ereditarietà dei template per maggiori informazioni:
+
+https://docs.djangoproject.com/en/3.1/ref/templates/language/#template-inheritance
+
+Normalmente il nome del template è relativo alla directory principale del template loader. Un argomento stringa potrebbe essere anche contenere elementi di riferimento relativo alle directory come "./" o "../.".   Ad esempio prendiamo la seguente struttura:
+
+	dir1/
+		template.html
+		base2.html
+		my/
+			base3.html
+	base1.html
+
+In template.html, sono validi i seguenti path:
+
+	{% extends "./base2.html" %}
+	{% extends "../base1.html" %}
+	{% extends "./my/base3.html" %}
+
+
+--------
+ filter
+--------
+
+Filtra il contenuto del blocco attraverso uno o più filtri. Possono essere specificati filtri multipli con pipe e filtri con argomenti, esattamente come nella sintassi di variabili.
+
+Si noti che block include tutto il testo compreso fra il tag  filter  e il tag  endfilter .  Esempio:
+
+	{% filter force_escape|lower %}
+		This text will be HTML-escaped, and will appear in all lowercase.
+	{% endfilter %}
+
+[Nota] I filtri  escape  e  safe  non sono argomenti accettabili. Piuttosto è bene usare il tag autoescape per gestire l'autoescaping per i blocchi di codice del template.
+
+
+---------
+ firstof
+---------
+
+Restituisce il primo argomento variabile che non è "falso" (cioè esiste, non è vuoto, non è un falso valore booleano e non è un valore numerico zero). Non restituisce nulla se tutte le variabili passate sono "false".
+
+Esempio:
+
+	{% firstof var1 var2 var3 %}
+
+E' equivalente a ...
+
+	{% if var1 %}
+		{{ var1 }}
+	{% elif var2 %}
+		{{ var2 }}
+	{% elif var3 %}
+		{{ var3 }}
+	{% endif %}
+
+Possiamo utilizzare anche una stringa come valore di riserva in caso tutte le variabili passate siano false:
+
+	{% firstof var1 var2 var3 "fallback value" %}
+
+Questo tag esegue l'escape automatico dei valori delle variabili. Possiamo disabilitare l'auto-escaping con:
+
+	{% autoescape off %}
+		{% firstof var1 var2 var3 "<strong>fallback value</strong>" %}
+	{% endautoescape %}
+
+O se solo alcune variabili devono essere sottoposte ad escape possiamo usare:
+
+	{% firstof var1 var2 | safe var3 "<strong>fallback value</strong>" | safe %}
+
+Possiamo usare la sintassi {% firstof var1 var2 var3 as value %} per memorizzare l'output all'interno di una variabile.
+
+
+-----
+ for
+-----
+
+Esegue un ciclo su ogni item di un array, rendendo disponibile l'item all'interno di una variabile di contesto. Ad esempio per visulizzare una lista di atleti contenuta nell'array athlete_list avremo:
+
+	<ul>
+	{% for athlete in athlete_list %}
+		<li>{{ athlete.name }}</li>
+	{% endfor %}
+	</ul>
+
+Possiamo ciclare su una lista in ordine inverso con  {% for obj in list reversed %}
+
+Se è necessario scorrere una lista di liste, è possibile decomprimere i valori in ogni sottolista in singole variabili. Ad esempio, se il contesto contiene un elenco di coordinate (x, y) chiamate points, è possibile utilizzare quanto segue per visualizzare l'elenco di punti:
+
+	{% for x, y in points %}
+		There is a point at {{ x }},{{ y }}
+	{% endfor %}
+
+Ciò può essere utile anche se è necessario accedere agli elementi in un dizionario. Ad esempio, se il contesto contenesse un dizionario data, quanto segue visualizzerà le chiavi e i valori del dizionario:
+
+	{% for key, value in data.items %}
+		{{ key }}: {{ value }}
+	{% endfor %}
+
+Teniamo presente che per l'operatore "." (dot operator), la ricerca della chiave del dizionario ha la precedenza sulla ricerca del metodo. Pertanto, se il dizionario 'data' contiene una chiave denominata 'items', data.items restituirà data['items'] invece di data.items(). Evitare l'aggiunta di chiavi che hanno lo steso nome dei metodi del dizionario, se si desidera utilizzare gli stessi metodi in un template (items, values, keys, ecc.). Ulteriori informazioni sull'ordine di ricerca dell'operatore punto sono spercificate nella documentazione delle variabili di template:
+
+https://docs.djangoproject.com/en/3.1/ref/templates/language/#template-variables
+
+Il ciclo for definisce alcune variabili disponibili durante la sua esecuzione:
+	forloop.counter		Contatore del loop (base 1)	forloop.counter0	Contatore del loop (base 0)	forloop.revcounter	Numero di interazioni dalla fine del ciclo (base 1)	forloop.revcounter0 Numero di interazioni dalla fine del ciclo (base 0)	forloop.first		Vero se è la prima iterazione	forloop.last		Vero se è l'ultima iterazione	forloop.parentloop	Pe cicli annidati, ciclo che racchiude il corrente
+-------------
+ for ... empty
+-------------
+
+Il tag for può richiedere una clausola opzionale {% empty %} il cui testo viene visualizzato se l'array dato è vuoto o non è stato trovato:
+
+	<ul>
+		{% for athlete in athlete_list %}
+			<li>{{ athlete.name }}</li>
+		{% empty %}
+			<li>Sorry, no athletes in this list.</li>
+		{% endfor %}
+	</ul>
+
+Il codice su riportato è equivalente, ma più sintetico, chiaro e veloce del seguente:
+
+	<ul>
+		{% if athlete_list %}
+			{% for athlete in athlete_list %}
+				<li>{{ athlete.name }}</li>
+			{% endfor %}
+		{% else %}
+			<li>Sorry, no athletes in this list.</li>
+		{% endif %}
+	</ul>
+
+
+----
+ if
+----
+
+Il tag {% if %} valuta una variabile e se quella variabile è "vera" (cioè esiste, non è vuota e non è un falso valore booleano) viene emesso il contenuto del blocco:
+
+	{% if athlete_list %}
+		Number of athletes: {{ athlete_list|length }}
+	{% elif athlete_in_locker_room_list %}
+		Athletes should be out of the locker room soon!
+	{% else %}
+		No athletes.
+	{% endif %}
+
+Nel codice su riportato, se athlete_listnon non è vuoto, il numero di atleti verrà visualizzato dalla variabile {{ athlete_list|length }}
+
+Come si vede, il tag if può richiedere una o più clausole {% elif %}, oltre a una clausola {% else %} che verrà visualizzata se tutte le condizioni precedenti falliscono. Queste clausole sono facoltative.
+
+
+[ Operatori booleani ]
+
+Il tag if pu può usare gli operatori and, or o not per testare un numero di variabili o definire la loro negazione:
+
+	{% if athlete_list and coach_list %}
+		Both athletes and coaches are available.
+	{% endif %}
+
+	{% if not athlete_list %}
+		There are no athletes.
+	{% endif %}
+
+	{% if athlete_list or coach_list %}
+		There are some athletes or some coaches.
+	{% endif %}
+
+	{% if not athlete_list or coach_list %}
+		There are no athletes or there are some coaches.
+	{% endif %}
+
+	{% if athlete_list and not coach_list %}
+		There are some athletes and absolutely no coaches.
+	{% endif %}
+
+
+Possiamo usare sia la clausole and che or dentro lo stesso tag, con and che ha la preceedenza su or, ad esempio il tag...
+
+	{% if athlete_list and coach_list or cheerleader_list %}
+
+... sarà interpretato come:
+
+	if (athlete_list and coach_list) or cheerleader_list
+
+Usare le parentesi nel tag if genera un errore di sintassi. Se si vuole indicare la precedenza, è necessario usare tag if nidificati.
+
+I tag if possono usare gli operatori  ==, !=, <, >, <=, >=, in, not in, is, is not  che descriviamo di seguito.
+
+	==  Operatore di uguaglianza. Esempio:
+
+		{% if somevar == "x" %}
+			This appears if variable somevar equals the string "x"
+		{% endif %}
+
+	!=  Operatore di disuguaglianza. Esempio:
+
+		{% if somevar != "x" %}
+			This appears if variable somevar does not equal the string "x",
+			or if somevar is not found in the context
+		{% endif %}
+
+	<   Operatore minore di... Esempio:
+
+		{% if somevar < 100 %}
+			This appears if variable somevar is less than 100.
+		{% endif %}
+
+	>   Operatore maggiore di...  Esempio:
+	
+		{% if somevar > 0 %}
+			This appears if variable somevar is greater than 0.
+		{% endif %}
+
+	<=  Operatore minore o uguale. Esempio:
+
+		{% if somevar <= 100 %}
+			This appears if variable somevar is less than 100 or equal to 100.
+		{% endif %}
+
+	>=	Operatore maggiore o uguale. Esempio:
+	
+		{% if somevar >= 1 %}
+			This appears if variable somevar is greater than 1 or equal to 1.
+		{% endif %}
+
+	in	Operatore contenuto in. Questo operatore è supportato da molti container 
+		Python e serve a testare la presenza di un dato elemento all'interno di 
+		detto contenitore. 
+		E' possibile usare  not in  come operatore di non contenuto in.
+		Quelli che seguono sono esempi di come interpretare la forma "x in y".
+
+		{% if "bc" in "abcdef" %}
+			This appears since "bc" is a substring of "abcdef"
+		{% endif %}
+
+		{% if "hello" in greetings %}
+			If greetings is a list or set, one element of which is the string
+			"hello", this will appear.
+		{% endif %}
+
+		{% if user in users %}
+			If users is a QuerySet, this will appear if user is an
+			instance that belongs to the QuerySet.
+		{% endif %}
+
+	is	Operatore di identià degli oggetti. Verifica se due valori appartengono
+	    allo stesso oggetto.  E' possibile usare  is not  per verificare la non
+		appartenenza ad un oggetto.
+				
+		{% if somevar is True %}
+			This appears if and only if somevar is True.
+		{% endif %}
+
+		{% if somevar is None %}
+			This appears if somevar is None, or if somevar is not found 
+			in the context.
+		{% endif %}
+
+		{% if somevar is not True %}
+			This appears if somevar is not True, or if somevar is not found 
+			in the context.
+		{% endif %}
+
+		{% if somevar is not None %}
+			This appears if and only if somevar is not None.
+		{% endif %}
+
+[ Filtri ]
+
+E' possibile usare i filtri nelle espressioni:
+
+	{% if messages|length >= 100 %}
+		You have lots of messages today!
+	{% endif %}
+
+
+[ Espressioni complesse ]
+
+Tutto quanto sopra può essere combinato per formare espressioni complesse. Per tali espressioni, può essere importante sapere come vengono raggruppati gli operatori quando l'espressione viene valutata, ovvero le regole di precedenza. La precedenza degli operatori, dal più basso al più alto, è la seguente:
+
+	or		and		not		in		==, !=, <, >, <=, >=
+
+Ad esempio l'espressione complessa contenuta nel tag if che segue ...
+
+	{% if a == b or c == d and e %}
+
+... è interpretata come ...
+
+	(a == b) or ((c == d) and e)
+
+Se si ha bisogno di applicare differenti precedenze, è necessario usare tag nidificati. Talvolta questo è il modo migliore in assoluto, per chi non conosce le regole di precedenza.
+
+Gli operatori di comparazione non possono essere concatenati come in Python o nella notazione matematica. Ad esempio, la seguente espressione è sbagliata:
+
+	{% if a > b > c %}   # NO!
+
+Bisogna invece usare la seguente espressione:
+
+	{% if a > b and b > c %}
+
+
+----------------------
+ ifequal / ifnotequal
+----------------------
+
+Si riporta questo tag il cui uso comunque è deprecato dalla versione 3.1. La forma {% ifequal a b %} ... {% endifequal %} è infatti un modo obsoleto di scrivere {% if a == b %} ... {% endif %}. Allo stesso modo alla forma  {% ifnotequal a b %} ... {% endifnotequal %}  è sostituito  {% if a != b %} ... {% endif %}.
+
+
+-----------
+ ifchanged
+-----------
+
+Il blocco definito dal tag {% ifchanged %} è usato all'interno dei cicli e controlla se un valore è cambiato rispetto alla precedente iterazione.
+
+Può essere usato in due possibili modi.
+
+1. Controlla i propri contenuti renderizzati rispetto allo stato precedente e 
+   visualizza il contenuto solo se è cambiato. Ad esempio, questo visualizza un 
+   elenco di giorni, visualizzando solo il mese se cambia:
+
+	<h1>Archive for {{ year }}</h1>
+	{% for date in days %}
+		{% ifchanged %}<h3>{{ date|date:"F" }}</h3>{% endifchanged %}
+		<a href="{{ date|date:"M/d"|lower }}/">{{ date|date:"j" }}</a>
+	{% endfor %}
+
+2. Se vengono fornite una o più variabili, controlla se qualche variabile è 
+   cambiata. Ad esempio, quanto segue mostra la data ogni volta che cambia, mentre
+   mostra l'ora se l'ora o la data sono cambiate:
+
+	{% for date in days %}
+		{% ifchanged date.date %} {{ date.date }} {% endifchanged %}
+		{% ifchanged date.hour date.date %}
+			{{ date.hour }}
+		{% endifchanged %}
+	{% endfor %}
+
+Il tag ifchanged può richiedere una clausola opzionale {% else %} che verrà usata se il valore non è cambiato:
+
+	{% for match in matches %}
+		<div style="background-color:
+			{% ifchanged match.ballot_id %}
+				{% cycle "red" "blue" %}
+			{% else %}
+				gray
+			{% endifchanged %}
+		"> {{ match }} </div>
+	{% endfor %}
+
+
+---------
+ include
+---------
+
+Carica un template e ne esegue il rendering con il contesto corrente. Questo è un modo per "includere" altri modelli all'interno di un template.
+
+Il nome del template può essere una variabile o una stringa hardcoded (tra virgolette), tra virgolette singole o doppie.
+
+Questo esempio include i contenuti del template "foo/bar.html":
+
+	{% include "foo/bar.html" %}
+
+Normalmente il nome del template è relativo alla directory principale del caricatore di modelli. Un argomento stringa può anche essere un percorso relativo che inizia con ./o ../ come descritto nel tag extends.
+
+Questo esempio include il contenuto del template il cui nome è contenuto nella variabile template_name:
+
+	{% include template_name %}
+
+La variabile può anche essere qualsiasi oggetto con un metodo render() che accetta un contesto. Ciò consente di fare riferimento a un template compilato nel nostro contesto.
+
+Inoltre, la variabile può essere un iterabile dei nomi dei template, nel qual caso la prima che viene caricata sarà utilizzat, come da select_template().
+
+Un template incluso viene visualizzato nel contesto del template che lo include. Questo esempio produce l'output: "Hello, John!"
+
+  * Contesto:	la variabile person è impostata a "John" e la variable greeting
+				impostata ad "Hello".
+
+  * Template:	{% include "name_snippet.html" %}
+  
+  * Template name_snippet.html:
+  				{{ greeting }}, {{ person|default:"friend" }}!
+
+E' possibile passare contenuti addizionali al template usando argomenti con parole chiave:
+
+	{% include "name_snippet.html" with person="Jane" greeting="Hello" %}
+
+Se vogliamo fare il render del contesto solo con le variabili fornite (o anche nessuna variabile), usiamo l'opzione only. Nel prossimo esempio nessun'altra variabile sarà disponibile nel template che viene incluso:
+
+	{% include "name_snippet.html" with greeting="Hi" only %}
+
+Nota:  Il tag include dovrebbe essere considerato una impoementazione del tipo "renderizza questo subtemplate ed includi l'HTML", non un "fai il parse di questo subtemplate ed includi il suo contenuto come se fosse parte di quello parent". Questo significa che non ci sono elementi condivisi fra i template inclusi - ciascuno ha un proprio processo di rendering completamente indipendente.
+
+I blocchi sono valutati prima della loro inclusione.  Questo significa che un template che include dei blocchi da un un altro conterrà blocchi che sono stati già valutati e renderizzati - non blocchi che subiscono l'override, ad esempio da un template esistente.
+
+In Django 3.1 è stato aggiunto il supporto per le iterazioni sui template.
+
+
+------
+ load
+------
+
+Carica un set di tag di un template personalizzato.
+
+Ad esempio, il template che segue carica tutti i tag e i filtri registrati in somelibrary e otherlibrary appartenente al pacchetto package:
+
+	{% load somelibrary package.otherlibrary %}
+
+Possiamo anche caricare in modo specifico dei filtri individuali o tag da una libreria, usando l'argomento from. Nel prossimo esempio il template tag/filtri chiamati foo e bar sono caricati da somelibrary:
+
+	{% load foo bar from somelibrary %}
+
+Per maggiori informazioni vedasi gli argomenti sui tag e filtri di libreria personalizzati.
+
+
+-------
+ lorem
+-------
+
+Mostra del testo casuale in latino "lorem ipsum", utile per riempire le pagine di prova. Il formato è:
+
+	{% lorem [count] [method] [random] %}
+
+Il tag {% lorem %} può avere da zero a tre argomenti, che sono:
+
+	count	Numero o variabile che indica il numero di paragrafi (default 1).	method	Che assume i valori  "w" per le parole, "p" per i paragrafi HTML 
+			oppure "b" per il testo normale del blocco dei paragrafi (default).
+	random	Indica di generare parole random; se indicato, non viene usato nei
+			paragrafi comuni ("Lorem ipsum dolor sit amet...") durante la generazione
+			del testo.Esempi:
+	* {% lorem %} 				genera un paragrafo "lorem ipsum" generico.
+	* {% lorem 3 p %} 			genera un paragrafo "lorem ipsum" e atri due paragrafi
+								casuali racchiusi in atrettanti tag <p> di HTML.
+	* {% lorem 2 w random %} 	genera due parole latine casuali.
+
+
+-----
+ now
+-----
+
+Visualizza la data e/o l'ora correnti, utilizzando un formato in base alla stringa data. Tale stringa può contenere caratteri di specificatori di formato come descritto nella sezione del filtro [date]. Esempio:
+
+	It is {% now "jS F Y H:i" %}
+
+Si noti che è possibile usare stringhe che sfruttano codici di escape se si vuole usare il valore "grezzo".  In questo esempio, sia "o" che "f" sono preceduti da una barra rovesciata, perché altrimenti ognuno sarebbe interpretato come una stringa di formato che visualizza rispettivamente l'anno e l'ora:
+
+	It is the {% now "jS \o\f F" %}
+
+Visualizzerà "It is the 4th of September".
+
+Nota: Il formato passato può anche ssere uno di quelli predefiniti da DATE_FORMAT, DATETIME_FORMAT, SHORT_DATE_FORMAT or SHORT_DATETIME_FORMAT. I formati predefiniti possono variare a seconda delle impostazioni internazionali correnti e se la localizzazione del formato è abilitata, ad esempio:
+
+	It is {% now "SHORT_DATETIME_FORMAT" %}
+
+È inoltre possibile utilizzare la sintassi per memorizzare l'output (come stringa) all'interno di una variabile. Questo è utile se vuoi usare {% now %} all'interno di un template tag come blocktranslate; ad esempio:
+
+	{% now "Y" as current_year %}
+	{% blocktranslate %}Copyright {{ current_year }}{% endblocktranslate %}
+
+
+---------
+ regroup
+---------
+
+Raggruppa un elenco di oggetti simili in base a un attributo comune.
+
+Questo tag complesso è meglio illustrato per mezzo di un esempio: diciamo che cities è un elenco di città rappresentata da dizionari che contengono le chiavi "name", "population" e "country":
+
+	cities = [
+		{'name': 'Mumbai', 'population': '19,000,000', 'country': 'India'},
+		{'name': 'Calcutta', 'population': '15,000,000', 'country': 'India'},
+		{'name': 'New York', 'population': '20,000,000', 'country': 'USA'},
+		{'name': 'Chicago', 'population': '7,000,000', 'country': 'USA'},
+		{'name': 'Tokyo', 'population': '33,000,000', 'country': 'Japan'},
+	]
+
+... e desideriamo visualizzare una lista gerarchica ordinata per paese, come questa:
+
+	* India
+		o Mumbai: 19,000,000
+		o Calcutta: 15,000,000
+	* USA
+		o New York: 20,000,000
+		o Chicago: 7,000,000
+	* Japan
+		o Tokyo: 33,000,000
+
+Possiamo usare il tag {% regroup %} per raggruppare la lista per paese. Il seguente snippet di codice del template dovrebbe raggiungere lo scopo:
+
+	{% regroup cities by country as country_list %}
+
+	<ul>
+	{% for country in country_list %}
+		<li>{{ country.grouper }}
+		<ul>
+			{% for city in country.list %}
+			  <li>{{ city.name }}: {{ city.population }}</li>
+			{% endfor %}
+		</ul>
+		</li>
+	{% endfor %}
+	</ul>
+
+Guardiamo questo esempio. {% regroup %} accetta tre argomenti: la lista che vogliamo raggruppare, l'attributo per cui raggruppare e il nome della lista risultante.  Qui, stiamo raggruppando le liste di città tramite tramite attributo country e nominando il risultato country_list.
+
+{% regroup %} produce una lista (in questo caso, country_list) di oggetti di tipo group. Gli oggetti group sono istanze di namedtuple() con due parametri:
+
+	* grouper  	l'elemento di raggruppamento (es. la stringa "India" o "Japan").
+	
+	* list 		una lista di tutti gli item del gruppo (es. la list delle città 
+				con country='India').
+
+Poichè {% regroup %} produce oggetti namedtuple(), possiamo riscrivere l'esempio precedente come segue:
+
+	{% regroup cities by country as country_list %}
+
+	<ul>
+	{% for country, local_cities in country_list %}
+		<li>{{ country }}
+		<ul>
+			{% for city in local_cities %}
+			  <li>{{ city.name }}: {{ city.population }}</li>
+			{% endfor %}
+		</ul>
+		</li>
+	{% endfor %}
+	</ul>
+
+Notiamo che {% regroup %} non ordina il proprio input!  Il nostro esempio si basa sul fatto che l' elenco è stato ordinato in primo luogo per paese (country). Se l' elenco non ordinasse i suoi membri per paese, il raggruppamento mostrerebbe ingenuamente più di un gruppo per un singolo paese. 
+
+Ad esempio, supponiamo che l' elenco sia stato impostato su questo (nota che i paesi non sono raggruppati insieme):
+ 
+	cities = [
+		{'name': 'Mumbai', 'population': '19,000,000', 'country': 'India'},
+		{'name': 'New York', 'population': '20,000,000', 'country': 'USA'},
+		{'name': 'Calcutta', 'population': '15,000,000', 'country': 'India'},
+		{'name': 'Chicago', 'population': '7,000,000', 'country': 'USA'},
+		{'name': 'Tokyo', 'population': '33,000,000', 'country': 'Japan'},
+	]
+
+Con questo input di città, l'esempio precedente del template {% regroup %} restituirebbe il seguente output:
+
+	* India
+		o Mumbai: 19,000,000
+	* USA
+		o New York: 20,000,000
+	* India
+		o Calcutta: 15,000,000
+	* USA
+		o Chicago: 7,000,000
+	* Japan
+		o Tokyo: 33,000,000
+
+La soluzione più semplice a questo trucco è assicurarsi nel codice di visualizzazione che i dati siano ordinati in base a come si desidera visualizzarli.
+
+Un'altra soluzione è ordinare i dati nel template utilizzando il filtro dictsort, se i dati sono in un elenco di dizionari:
+
+	{% regroup cities|dictsort:"country" by country as country_list %}
+
+
+[Raggruppamento su altre proprietà]
+
+Qualsiasi template di ricerca valido è un attributo di raggruppamento previsto per il tag di raggruppamento, inclusi metodi, attributi, chiavi di dizionario e voci di elenco. Ad esempio, se il campo "country" è una chiave esterna per una classe con un attributo "description", possiamo usare:
+
+	{% regroup cities by country.description as country_list %}
+
+Oppure, se country è un campo con scelta, può usare un metodo get_FOO_display() come attributo, che consete di raggruppare sulla stringa di visualizzazione anzichà sulla chiave choices:
+
+	{% regroup cities by get_country_display as country_list %}
+
+{{ country.grouper }} mostrerà ora i campi dei valori del set choices anzichè le chiavi.
+
+
+------------
+ resetcycle
+------------
+
+Ripristina un ciclo precedente in modo che si riavvii dal suo primo item al successivo passaggio. Senza argomenti, {% resetcycle%} resetterà l'ultimo {% cycle%} definito nel template. Esempio di utilizzo:
+
+	{% for coach in coach_list %}
+		<h1>{{ coach.name }}</h1>
+		{% for athlete in coach.athlete_set.all %}
+			<p class="{% cycle 'odd' 'even' %}">{{ athlete.name }}</p>
+		{% endfor %}
+		{% resetcycle %}
+	{% endfor %}
+
+Questo esempio restituirà questo HTML:
+
+	<h1>José Mourinho</h1>
+	<p class="odd">Thibaut Courtois</p>
+	<p class="even">John Terry</p>
+	<p class="odd">Eden Hazard</p>
+
+	<h1>Carlo Ancelotti</h1>
+	<p class="odd">Manuel Neuer</p>
+	<p class="even">Thomas Müller</p>
+
+Notare come il primo blocco termina con class = "odd" e il nuovo inizia con class = "odd". Senza il tag {% resetcycle%}, il secondo blocco inizierebbe con class="even". Possiamo anche reimpostare i tag del ciclo con nome:
+
+	{% for item in list %}
+		<p class="{% cycle 'odd' 'even' as stripe %} {% cycle 'major' 'minor' 'minor' 'minor' 'minor' as tick %}">
+			{{ item.data }}
+		</p>
+		{% ifchanged item.category %}
+			<h1>{{ item.category }}</h1>
+			{% if not forloop.first %}{% resetcycle tick %}{% endif %}
+		{% endifchanged %}
+	{% endfor %}
+
+In questo esempio, abbiamo sia le righe dispari e pari alternate che una riga "principale" ogni quinta riga. Il ciclo di cinque righe viene ripristinato quando una categoria cambia.
+
+
+-----------
+ spaceless
+-----------
+
+Rimuove gli spazi vuoti tra i tag HTML. Ciò include caratteri di tabulazione e nuove righe. Esempio:
+
+	{% spaceless %}
+		<p>
+			<a href="foo/">Foo</a>
+		</p>
+	{% endspaceless %}
+
+Questo esempio restituirà questo HTML:
+	
+	<p><a href="foo/">Foo</a></p>
+
+Viene rimosso solo lo spazio tra i tag, non lo spazio tra i tag e il testo. In questo esempio, lo spazio intorno a Hello non verrà rimosso:
+
+	{% spaceless %}
+		<strong>
+			Hello
+		</strong>
+	{% endspaceless %}
+
+
+-------------
+ templatetag
+-------------
+
+Restituisce uno dei caratteri di sintassi utilizzati per comporre i tag del template.
+
+Poiché il sistema del template non ha il concetto di "escape", per visualizzare uno dei bit utilizzati nei tag del template, è necessario utilizzare il tag {% templatetag %}.
+
+L'argomento indica quale bit del template emettere:
+
+	Argomento		Output
+	----------------------------
+	openblock		{%
+	closeblock		%}
+	openvariable	{{
+	closevariable	}}
+	openbrace		{
+	closebrace		}
+	opencomment		{#
+	closecomment	#}
+
+Esempio:
+
+	{% templatetag openblock %} url 'entry_list' {% templatetag closeblock %}
+
+-----
+ url
+-----
+
+Restituisce un riferimento di percorso assoluto (un URL senza il nome di dominio) corrispondente a una data view e parametri opzionali. Qualsiasi carattere speciale nel percorso risultante verrà codificato utilizzando iri_to_uri().
+
+Questo è un modo per generare collegamenti senza violare il principio DRY dovendo codificare gli URL nei modelli:
+
+	{% url 'some-url-name' v1 v2 %}
+
+Il primo argomento è un nome di pattern URL. Può essere un valore letterale tra virgolette o qualsiasi altra variabile di contesto. Gli argomenti aggiuntivi sono facoltativi e dovrebbero essere valori separati da spazi che verranno utilizzati come argomenti nell'URL. L'esempio sopra mostra il passaggio di argomenti posizionali. In alternativa possiamo utilizzare la sintassi delle parole chiave:
+
+	{% url 'some-url-name' arg1=v1 arg2=v2 %}
+
+Non dobbiamo combinare la sintassi posizionale e della parola chiave in una singola chiamata. Tutti gli argomenti richiesti da URLconf dovrebbero essere presenti.
+
+Per esempio, supponiamo di avere una view, app_views.client, il cui URLconf accetta un ID client (qui, client() è un metodo all'interno del file di view app_views.py). La riga URLconf potrebbe essere simile a questa:
+
+	path('client/<int:id>/', app_views.client, name='app-views-client')
+
+Se l'URLconf di questa app è incluso nell'URLconf del progetto in un percorso come questo...
+
+	path('clients/', include('project_name.app_name.urls'))
+
+
+... allora, in un template, possiamo creare un collegamento a questa view in questo modo:
+
+	{% url 'app-views-client' client.id %}
+
+Il tag del template produrrà la stringa /clients/client/123/
+
+Teniamo presente che se l'URL che stiamo invertendo non esiste, otterremo il sollevamento di un'eccezione NoReverseMatch, che farà sì che il nostro sito visualizzi una pagina di errore.
+
+Se desideriamo recuperare un URL senza visualizzarlo, possiamo utilizzare una chiamata leggermente diversa:
+
+	{% url 'some-url-name' arg arg2 as the_url %}
+
+	<a href="{{ the_url }}">I'm linking to {{ the_url }}</a>
+
+
+L'ambito della variabile creata dalla sintassi as var è {% block %} in cui appare il tag {% url %}.
+
+Questa sintassi {% url ... as var %} non causerà un errore se manca la view. In pratica lo utilizzeremo per collegarci a views facoltative:
+
+	{% url 'some-url-name' as the_url %}
+	{% if the_url %}
+	  <a href="{{ the_url }}">Link to optional stuff</a>
+	{% endif %}
+
+Se desideri recuperare un URL con spazio dei nomi, specifica il nome completo:
+
+	{% url 'myapp:view-name' %}
+
+Ciò seguirà la normale strategia di risoluzione degli URL con spazio dei nomi, incluso l'utilizzo di eventuali suggerimenti forniti dal contesto per l'applicazione corrente.
+
+Attezione. Non dimentichiamo di inserire virgolette attorno al nome del pattern URL, altrimenti il valore verrà interpretato come una variabile di contesto!
+
+
+----------
+ verbatim
+----------
+
+Interrompe il motore del template dal rendering del contenuto di questo tag di blocco.
+
+Un utilizzo comune è consentire un livello di template JavaScript che è in conflitto con la sintassi di Django. Esempio:
+
+	{% verbatim %}
+		{{if dying}}Still alive.{{/if}}
+	{% endverbatim %}
+
+Possiamo anche designare un tag di chiusura specifico, consentendo l'uso di {% endverbatim %} come parte dei contenuti non renderizzati:
+
+	{% verbatim myblock %}
+		Avoid template rendering via the {% verbatim %}{% endverbatim %} block.
+	{% endverbatim myblock %}
+
+
+------------
+ widthratio
+------------
+
+Per la creazione di grafici a barre e simili, questo tag calcola il rapporto tra un dato valore e un valore massimo, quindi applica tale rapporto a una costante. Esempio:
+
+	<img src="bar.png" alt="Bar"
+		 height="10" width="{% widthratio this_value max_value max_width %}">
+
+Se this_value è 175, max_value è 200 e max_width è 100, l'immagine nell'esempio sopra sarà larga 88 pixel (perché 175/200 = .875; .875 * 100 = 87,5 che viene arrotondato a 88).
+
+In alcuni casi potremmo voler catturare il risultato di widthratio in una variabile. Può essere utile, ad esempio, in un blocktranslate come questo:
+
+	{% widthratio this_value max_value max_width as width %}
+	{% blocktranslate %}The width is: {{ width }}{% endblocktranslate %}
+
+
+------
+ with
+------
+
+Memorizza nella cache una variabile complessa con un nome più semplice. Ciò è utile quando si accede più volte a un metodo "costoso" (ad esempio, che coinvolge il database). Esempio:
+
+	{% with total=business.employees.count %}
+		{{ total }} employee{{ total|pluralize }}
+	{% endwith %}
+
+La variabile popolata (nell'esempio sopra, total) è disponibile solo tra i tag {% with%} e {% endwith%}.
+
+Possiamo assegnare più di una variabile di contesto:
+
+	{% with alpha=1 beta=2 %}
+		...
+	{% endwith %}
+
+Nota. Il precedente formato più dettagliato è ancora supportato:
+
+	{% with business.employees.count as total %}
+
+
+
+Built-in filter reference
+=========================
+
+-----
+ add
+-----
+
+Aggiunge l'argomento al valore. Esempio:
+
+	{{ value|add:"2" }}
+
+Se value è 4, l'uscita sarà 6.
+
+Questo filtro proverà prima a forzare entrambi i valori in numeri interi. Se ciò non riesce, tenterà di sommare i valori comunque. Questo funzionerà su alcuni tipi di dati (stringhe, elenco, ecc.) E fallirà su altri. 
+
+Se fallisce, il risultato sarà una stringa vuota.
+
+Ad esempio, se abbiamo...
+
+	{{ first|add:second }}
+
+... e il primo è [1, 2, 3] e il secondo è [4, 5, 6], l'uscita sarà [1, 2, 3, 4, 5, 6].
+
+Attenzione. Le stringhe che possono essere convertite in numeri interi verranno sommate, non concatenate, come nel primo esempio.
+
+
+------------
+ addslashes
+------------
+
+Aggiunge barre prima delle virgolette. Utile per eseguire l'escape di stringhe in CSV, ad esempio:
+
+	{{ value|addslashes }}
+
+Se value è "L'uso di Django", l'output sarà "L\'uso di Django".
+
+
+----------
+ capfirst
+----------
+
+Pone in maiuscolo il primo carattere del valore. Se il primo carattere non è una lettera, questo filtro non ha effetto. Esempio:
+
+	{{ value|capfirst }}
+
+Se value è "django", l'output sarà "Django".
+
+
+--------
+ center
+--------
+
+Centra il valore in un campo di una data larghezza. Esempio:
+
+	"{{ value|center:"15" }}"
+
+Se value è "Django", l'output sarà "     Django    ".
+
+
+-----
+ cut
+-----
+
+Rimuove tutti i valori di arg dalla stringa data. Esempio:
+
+	{{ value|cut:" " }}
+
+Se value è "Stringa con spazi", l'output sarà "Stringaconspazi".
+
+
+------
+ date
+------
+
+Formatta una data in base al formato specificato.
+
+Utilizza un formato simile alla funzione date() di PHP (https://php.net/date) con alcune differenze.
+
+Nota. Questi caratteri di formato non vengono utilizzati in Django al di fuori dei modelli. Sono stati progettati per essere compatibili con PHP per facilitare la transizione per i progettisti.
+
+Stringhe di formato disponibili:
+
+Form.	Descrizione							Esempio di output
+-----------------------------------------------------------------------------------
+
+[Giorno]
+
+	d  	Giorno del mese, 2 cifre con zeri. 		da '01' a '31'
+
+	j  	Giorno del mese, senza zeri.			da '1' a '31'
+
+	D	Giorno settimana, testuale, 3 lettere.	'Fri'
+
+	l	Giorno settimana, testuale, lungo.		'Friday'
+
+	S	Suffisso ordinale inglese per il		'st' 'nd' 'rd' 'th'
+		giorno del mese, 2 caratteri.	
+
+	w	Giorno della settimana, cifre senza		da '0' (domenica) a '6' (sabato)
+		zeri iniziali.	
+
+	z	Giorno dell'anno.						da 1 a 366
+
+[Settimana]
+	
+	W	Numero settimana ISO-8601, con primo	da 1 a 53
+		giorno Lunedì.	1, 53
+
+[Mese]
+	
+	m	Mese, 2 digits con zero iniziali.		da '01' a '12'
+	
+	n	Mese senza zeri iniziali 				da '1' a '12'
+		
+	M	Mese, testuale, 3 lettere.				'Jan'
+	
+	b	Mese, testuale, 3 lettere, lowercase.	'jan'
+	
+	E	Mese, rappresentazione alternativa 		"listopada" (per la lingua polacca,
+		specifica della località solitamente 	al contrario di "Listopad")
+		utilizzata per la rappresentazione 
+		della data estesa.
+	
+	F	Mese, testuale, lungo.					'January'
+	
+	N	Abbreviazione del mese in stile 		'Jan.', 'Feb.', 'March', 'May'
+		Associated Press. Estensione 
+		proprietaria.	
+	
+	t		Numero di giorni nel mese specificato.	da 28 a 31
+
+[Anno]
+	
+	y	Anno, 2 digit.							'99'
+	
+	Y	Anno, 4 digit.							'1999'
+	
+	L	Valore booleano per indicare se si 		True  o  False
+		tratta di un anno bisestile.	
+	
+	o	Anno di numerazione delle settimane 	'1999'
+		ISO-8601, corrispondente al numero di 
+		settimana ISO-8601 (W) che utilizza le 
+		settimane bisestili. Vedere Y per il 
+		formato dell'anno più comune.
+
+[Orario]
+
+	g	Ora formato 12h senza zeri				da '1' a '12'
+	
+	G	Ora formato 24h senza zeri				da '0' a '23'
+	
+	h	Ora formato 12h con zeri				da '01' a '12'
+	
+	H	Ora formato 24h con zeri				da '00' a '23'
+	
+	i	Minuti									da '00' a '59'
+	
+	s	Secondi, 2 digits con zeri				da '00' a '59'
+	
+	u	Microsecondi							da 000000 a 999999
+	
+	a	'a.m.' o 'p.m.' (Si noti che questo 	'a.m.' o 'p.m.'
+		è leggermente diverso dall'output di 
+		PHP, perché include periodi che 
+		corrispondono allo stile dell'
+		Associated Press.)
+	
+	A	'a.m.' o 'p.m.' maiuscola				'AM' o 'PM'
+
+	f	Tempo, in ore e minuti di 12 ore, 		'1', '1:30'
+		con i minuti omessi se uguali a zero. 
+		Estensione proprietaria.	
+
+	P	Ora, in 12 ore ore, minuti e la 		'1 a.m.', '1:30 p.m.', 'midnight',
+		dicitura "a.m." / "P.m.", con i minuti 	'noon', '12:30 p.m.'
+		omessi se uguali a zero e le stringhe 	
+		speciali 'midnight' and 'noon' se 
+		appropriate. Estensione proprietaria.
+	
+[Timezone - fusi orari]
+
+	e	Nome del fuso orario. Potrebbe essere 	'', 'GMT', '-500', 'US/Eastern',...
+		in qualsiasi formato o potrebbe 
+		restituire una stringa vuota, a 
+		seconda del datetime.
+	
+	I	Ora legale, che sia in vigore o meno.	'1' or '0'
+
+	O	Differenza rispetto all'ora di 			'+0200'
+		Greenwich, in ore.	
+
+	T	Fuso orario di questa macchina.			'EST', 'MDT'
+
+	Z	Differenza di fuso orario in secondi. 	da -43200 a 43200
+		L'offset per i fusi orari a ovest di 
+		UTC è sempre negativo e per quelli a 
+		est di UTC è sempre positivo.
+	
+[Data/Ora]
+
+	c	Formato ISO 8601. (Nota: a differenza 	2008-01-02T10:30:00.000123+02:00, 
+		di altri formattatori, come "Z", "O" 	o 2008-01-02T10:30:00.000123 se 
+		o "r", il formattatore "c" non 			il datetime è naive
+		aggiungerà l'offset del fuso orario 
+		se il valore è un datetime naive 
+		(vedere datetime.tzinfo)
+	
+	r	Data formattata RFC 5322.				'Thu, 21 Dec 2000 16:01:07 +0200'
+
+	U	Secondi dall'epoca Unix (1 gennaio 
+		1970 00:00:00 UTC)
+	
+Esempio:
+
+	{{ value|date:"D d M Y" }}
+
+Se value è un oggetto datetime (ad esempio, il risultato di datetime.datetime.now()), l'output sarà la stringa 'Wed 09 Jan 2008'.
+
+Il formato trasmesso può essere uno di quelli predefiniti DATE_FORMAT, DATETIME_FORMAT, SHORT_DATE_FORMAT o SHORT_DATETIME_FORMAT, o un formato personalizzato che utilizza gli identificatori di formato mostrati nella tabella sopra. Si tenga presente che i formati predefiniti possono variare a seconda delle impostazioni internazionali correnti.
+
+Supponendo che USE_L10N sia True e LANGUAGE_CODE sia, ad esempio, "es", quindi per ...
+
+	{{ value|date:"SHORT_DATE_FORMAT" }}
+
+... l'output sarebbe la stringa "09/01/2008" (l'identificatore di formato "SHORT_DATE_FORMAT" per es locale fornito con Django è "d/m/Y").
+
+Quando viene utilizzato senza una stringa di formato, viene utilizzato l'identificatore di formato DATE_FORMAT. Assumendo le stesse impostazioni del precedente Esempio:
+
+	{{ value|date }}
+
+... restituisce 9 de Enero de 2008 (l'identificatore di formato DATE_FORMAT per es locale è r'j \d\e F \d\e Y'). Sia "d" che "e" sono preceduti da una barra rovesciata, perché altrimenti ciascuna sarebbe una stringa di formato che visualizza rispettivamente il giorno e il nome del fuso orario.
+
+È possibile combinare la data con il filtro dell'ora per eseguire il rendering di una rappresentazione completa di un valore datetime. Per esempio:
+
+	{{ value|date:"D d M Y" }} {{ value|time:"H:i" }}
+
+
+---------
+ default
+---------
+
+Se il valore restituisce False, utilizza il valore predefinito specificato. In caso contrario, utilizza il valore dato. Esempio:
+
+	{{ value|default:"nothing" }}
+
+Se value è "" (la stringa vuota), l'output non sarà "nothing".
+
+
+-----------------
+ default_if_none
+-----------------
+
+Se (e solo se) il valore è Nonte, utilizza il valore predefinito fornito. In caso contrario, utilizza il valore dato.
+
+Notare che se viene fornita una stringa vuota, il valore predefinito non verrà utilizzato. Utilizza il filtro predefinito se desideri eseguire il fallback per le stringhe vuote. Esempio:
+
+	{{ value|default_if_none:"nothing"}}
+
+Se value è  None , l'output non sarà "nothing".
+
+
+----------
+ dictsort
+----------
+
+Prende un elenco di dizionari e restituisce tale elenco ordinato in base alla chiave fornita nell'argomento. Esempio:
+
+	{{ value|dictsort:"name" }}
+
+Se value è:
+
+	[
+		{'name': 'zed', 'age': 19},
+		{'name': 'amy', 'age': 22},
+		{'name': 'joe', 'age': 31},
+	]
+
+allora l'output sarebbe:
+
+	[
+		{'name': 'amy', 'age': 22},
+		{'name': 'joe', 'age': 31},
+		{'name': 'zed', 'age': 19},
+	]
+
+Possiamo anche fare cose più complicate come:
+
+	{% for book in books|dictsort:"author.age" %}
+		* {{ book.title }} ({{ book.author.name }})
+	{% endfor %}
+
+Se i libri in books sono...
+
+	[
+		{'title': '1984', 'author': {'name': 'George', 'age': 45}},
+		{'title': 'Timequake', 'author': {'name': 'Kurt', 'age': 75}},
+		{'title': 'Alice', 'author': {'name': 'Lewis', 'age': 33}},
+	]
+
+... allora l'output sarebbe:
+
+	* Alice (Lewis)
+	* 1984 (George)
+	* Timequake (Kurt)
+
+dictsort può anche ordinare un elenco di elenchi (o qualsiasi altro oggetto che implementa __getitem __()) per elementi all'indice specificato. Esempio:
+
+	{{ value|dictsort:0 }}
+
+Se value è...
+
+	[
+		('a', '42'),
+		('c', 'string'),
+		('b', 'foo'),
+	]
+
+...allora l'output sarebbe:
+
+	[
+		('a', '42'),
+		('b', 'foo'),
+		('c', 'string'),
+	]
+
+È necessario passare l'indice come numero intero anziché come stringa. Quanto segue produce un output vuoto:
+
+	{{ values|dictsort:"0" }}
+
+
+------------------
+ dictsortreversed
+------------------
+
+Prende un elenco di dizionari e restituisce tale elenco ordinato in ordine inverso in base alla chiave fornita nell'argomento. 
+
+Funziona esattamente come il filtro precedente, ma il valore restituito sarà in ordine inverso.
+
+
+-------------
+ divisibleby
+-------------
+
+Restituisce True se il valore è divisibile per l'argomento. Esempio:
+
+	{{ value|divisibleby:"3" }}
+
+Se value è 21, l'output è True.
+
+
+
+--------
+ escape
+--------
+
+Esegue l'escape dell'HTML di una stringa. Nello specifico, effettua queste sostituzioni:
+
+	<	viene convertito in							&lt;
+	> 	viene convertito in							&gt;
+	'	(virgoletta singola) viene convertito in	&#x27;
+	"	(virgolette doppie) viene convertito in		&quot;
+	& 	viene convertito in 						&amp;
+
+Applicare l'escape a una variabile che normalmente avrebbe l'escape applicata al risultato risulterà in un solo round di escape. Quindi è meglio usare questa funzione anche in ambienti con autoescaping. Se si desidera applicare più passaggi di escape, è necessario utilizzare il filtro force_escape.
+
+Ad esempio, possiamo applicare l'escape ai campi quando l'autoescape è disattivata:
+
+	{% autoescape off %}
+		{{ title|escape }}
+	{% endautoescape %}
+
+
+----------
+ escapejs
+----------
+
+Caratteri di escape per l'utilizzo nelle stringhe JavaScript. Ciò non rende la stringa sicura per l'uso nei letterali template HTML o JavaScript, ma ti protegge da errori di sintassi quando si utilizzano modelli per generare JavaScript/JSON. Esempio:
+
+	{{ value|escapejs}}
+
+Se value è 
+
+	"testing\r\njavascript 'string\" <b>escaping</b>" 
+	
+... l'output sarà
+
+	"testing\\u000D\\u000Ajavascript \\u0027string\\u0022 \\u003Cb\\u003Eescaping\\u003C/b\\u003E"
+
+
+----------------
+ filesizeformat
+----------------
+
+Formatta il valore come una dimensione del file "leggibile dall'uomo" (ad esempio '13 KB', '4.1 MB', '102 bytes' e così via). Esempio:
+
+	{{ value|filesizeformat }}
+
+Se value è 123456789, l'output sarà 117.7 MB.
+
+A rigor di termini, filesizeformat non è conforme al Sistema internazionale di unità che consiglia di utilizzare KiB, MiB, GiB, ecc. Quando le dimensioni dei byte sono calcolate in potenze di 1024 (come in questo caso). Django utilizza invece nomi di unità tradizionali (KB, MB, GB, ecc.) corrispondenti ai nomi più comunemente usati.
+
+
+-------
+ first
+-------
+
+Restituisce il primo elemento in un elenco. Esempio:
+
+	{{ value|first}}
+
+Se value è la lista ['a', 'b', 'c'], l'output sarà 'a'.
+
+
+-------------
+ floatformat
+-------------
+
+Quando viene utilizzato senza argomenti, arrotonda un numero floating-point ad una cifra decimale, ma solo se è presente una parte decimale da visualizzare. Esempio:
+
+	valore		template						Output
+	---------------------------------------------------
+	34.23234	{{ value|floatformat}}			34.2
+	34.00000	{{ value|floatformat}}			34
+	34.26000	{{ value|floatformat}}			34.3
+
+Se utilizzato con un argomento numerico intero, floatformat arrotonda un numero a quel numero di cifre decimali. Esempio:
+
+	valore		template						Output
+	---------------------------------------------------
+	34.23234	{{ value|floatformat:3 }}		34.232
+	34.00000	{{ value|floatformat:3 }}		34.000
+	34.26000	{{ value|floatformat:3 }}		34.260
+
+Particolarmente utile è passare 0 (zero) come argomento che arrotonda il float all'intero più vicino.
+
+	valore		template						Output
+	---------------------------------------------------
+	34.23234	{{ value|floatformat:"0" }}		34
+	34.00000	{{ value|floatformat:"0" }}		34
+	39.56000	{{ value|floatformat:"0" }}		40
+
+Se l'argomento passato a floatformat è negativo, arrotonderà un numero a quel numero di cifre decimali, ma solo se è presente una parte decimale da visualizzare. Esempio:
+
+	valore		template						Output
+	---------------------------------------------------
+	34.23234	{{ value|floatformat:"-3" }}	34.232
+	34.00000	{{ value|floatformat:"-3" }}	34
+	34.26000	{{ value|floatformat:"-3" }}	34.260
+
+Usare floatformat senza argomenti equivale a usare floatformat con un argomento di -1.
+
+Nelle versioni precedenti a Django 3.1, veniva restituito uno zero negativo -0 per i numeri negativi arrotondati a zero.
+
+
+--------------
+ force_escape
+--------------
+
+Applica l'escape HTML a una stringa (vedere il filtro di escape per i dettagli).
+
+Questo filtro viene applicato immediatamente e restituisce una nuova stringa con escape. Ciò è utile nei rari casi in cui sono necessari più escape o si desidera applicare altri filtri ai risultati con escape. Normalmente, si desidera utilizzare il filtro escape.
+
+Ad esempio, se desideri catturare gli elementi HTML <p> creati dal filtro delle interruzioni di riga:
+
+	{% autoescape off %}
+		{{ body|linebreaks|force_escape }}
+	{% endautoescape %}
+
+
+-----------
+ get_digit
+-----------
+
+Dato un numero intero, restituisce la cifra richiesta, dove 1 è la cifra più a destra, 2 è la seconda cifra più a destra, ecc. Restituisce il valore originale per l'input non valido (se l'input o l'argomento non è un numero intero, o se argomento è minore di 1). Viceversa, l'output è sempre un numero intero. Esempio:
+
+	{{ value|get_digit:"2" }}
+
+Se value è 123456789, l'output sarà 8.
+
+
+-----------
+ iriencode
+-----------
+
+Converte un IRI (Internationalized Resource Identifier) in una stringa adatta per essere inclusa in un URL. Ciò è necessario se stiamo tentando di utilizzare stringhe contenenti caratteri non ASCII in un URL.
+
+È meglio utilizzare questo filtro su una stringa che è già passata attraverso il filtro urlencode. Esempio:
+
+	{{ value|iriencode }}
+
+Se value è "?test=1&me=2", l'output sarà "?test=1&amp;me=2".
+
+
+------
+ join
+------
+
+Unisce una lista con una stringa, come str.join(list) di Python. Esempio:
+
+	{{ value|join:" // " }}
+
+Se value è l'elenco ['a', 'b', 'c'],  l'output sarà la stringa "a // b // c".
+
+
+-------------
+ json_script
+-------------
+
+Produce in modo sicuro un oggetto Python come JSON, racchiuso in un tag <script>, pronto per l'uso con JavaScript.
+
+Argomento: HTML "id" del tag <script>.  Esempio:
+
+	{{ value|json_script:"hello-data" }}
+
+Se value è il dizionario {'hello': 'world'}, l'output sarà:
+
+	<script id="hello-data" type="application/json">{"hello": "world"}</script>
+
+È possibile accedere ai dati risultanti in JavaScript in questo modo:
+
+	valore const = JSON.parse (document.getElementById ('hello-data'). textContent);
+
+Gli attacchi XSS vengono mitigati sfuggendo ai caratteri "<", ">" e "&". Ad esempio, se il valore è {'hello': 'world</script>&amp;'}, l'output è:
+
+	<script id="hello-data" type="application/json">{"hello": "world\\u003C/script\\u003E\\u0026amp;"}</script>
+
+Ciò è compatibile con una rigorosa politica di sicurezza dei contenuti che proibisce l'esecuzione di script in-page. 
+
+Mantiene anche una netta separazione tra dati passivi e codice eseguibile.
+
+
+------
+ last
+------
+
+Restituisce l'ultimo elemento in un elenco. Esempio:
+
+	{{ value|last }}
+
+Se value è la lista ['a', 'b', 'c', 'd'], l'output sarà la stringa "d".
+
+
+--------
+ length
+--------
+
+Restituisce la lunghezza del valore. Funziona sia per le stringhe che per le liste. Esempio:
+
+	{{ value|length }}
+
+Se value è ['a', 'b', 'c', 'd'] o "abcd", l'output sarà 4.
+
+Il filtro restituisce 0 per una variabile non definita.
+
+
+
+-----------
+ length_is
+-----------
+
+Restituisce True se la lunghezza del valore è l'argomento o False in caso contrario. Esempio:
+
+	{{ value|length_is:"4" }}
+
+Se value è ['a', 'b', 'c', 'd'] o "abcd", l'output sarà True.
+
+
+------------
+ linebreaks
+------------
+
+Sostituisce le interruzioni di riga in testo normale con HTML appropriato; una singola nuova riga diventa un'interruzione di riga HTML (<br>) e una nuova riga seguita da una riga vuota diventa un'interruzione di paragrafo (</p>).
+
+Esempio:
+
+	{{ value|linebreaks }}
+
+Se value è  'Joel\nè uno slug' , l'output sarà   <p> Joel<br>è uno slug </p>
+
+
+--------------
+ linebreaksbr
+--------------
+
+Converte tutte le nuove righe in una parte di testo normale in interruzioni di riga HTML (<br>). Esempio:
+
+	{{ value|linebreaksbr }}
+
+Se value è  'Joel\nè uno slug' , l'output sarà    Joel<br>è uno slug
+
+
+-------------
+ linenumbers
+-------------
+
+Visualizza il testo con i numeri di riga. Esempio:
+
+	{{ value|linenumbers }}
+
+Se value è...
+
+	uno
+	due
+	tre
+
+... l'output sarà:
+
+	1. uno
+	2. due
+	3. tre
+
+
+-------
+ ljust
+-------
+
+Allinea a sinistra il valore in un campo di una data larghezza. Argomento: dimensione del campo. Esempio:
+
+	"{{ value|ljust:"10" }}"
+
+Se value è Django, l'output sarà "Django    "
+
+
+-------
+ lower
+-------
+
+Converte una stringa in tutto minuscolo. Esempio:
+
+	{{ value|lower }}
+
+Se value è 'Totally LOVING this Album!' , l'output sarà  'totally loving this album!'
+
+
+-----------
+ make_list
+-----------
+
+Restituisce il valore trasformato in un elenco. Per una stringa, è un elenco di caratteri.
+
+Per un numero intero, l'argomento viene convertito in una stringa prima di creare un elenco. Esempio:
+
+	{{ value|make_list }}
+
+Se value è la stringa "Joel", l'output sarà la lista ['J', 'o', 'e', 'l']. Se il valore è 123, l'output sarà l'elenco ["1", "2", "3"].
+
+
+---------------
+ phone2numeric
+---------------
+
+Converte un numero di telefono (possibilmente contenente lettere) nel suo equivalente numerico. L'input non deve essere un numero di telefono valido. Questo convertirà felicemente qualsiasi stringa. Esempio:
+
+	{{ value|phone2numeric }}
+
+Se value è 800-COLLECT, l'output sarà 800-2655328.
+
+
+-----------
+ pluralize
+-----------
+
+Restituisce un suffisso plurale se il valore non è 1, '1', o un oggetto di lunghezza 1. Per impostazione predefinita, questo suffisso è "s". Esempio:
+
+	You have {{ num_messages }} message{{ num_messages|pluralize }}
+
+Se num_messages è 1, l'output sarà "You have 1 message". Se num_messages è 2, l'output sarà "You have 2 messages".
+
+Per le parole che richiedono un suffisso diverso da "s", puoi fornire un suffisso alternativo come parametro del filtro.
+
+Esempio:
+
+	You have {{ num_walruses }} walrus{{ num_walruses|pluralize:"es" }}
+
+Per le parole che non si pluralizzano per suffisso semplice, puoi specificare sia un suffisso singolare che uno plurale, separati da una virgola. Esempio:
+
+	You have {{ num_cherries }} cherr{{ num_cherries|pluralize:"y,ies" }}.
+
+Nota. Usa blocktranslate per pluralizzare le stringhe tradotte.
+
+--------
+ pprint
+--------
+
+Un wrapper attorno a pprint.pprint () - per il debug, davvero.
+
+
+--------
+ random
+--------
+
+Restituisce un elemento casuale dalla lista data. Esempio:
+
+	{{ value|random }}
+
+Se value è l'elenco ['a', 'b', 'c', 'd'], l'output potrebbe essere "b".
+
+
+-------
+ rjust
+-------
+
+Giustifica un testo a destra entro una data larghezza. Argomento: dimensione del campo. Esempio:
+
+	"{{ value|rjust:"10" }}"
+
+Se value è Django, l'output sarà "    Django".
+
+
+------
+ safe
+------
+
+Contrassegna una stringa come che non richiede ulteriore escape HTML prima dell'output. Quando l'autoescaping è disattivato, questo filtro non ha effetto.
+
+Nota: Se concatenate filtri, un filtro applicato dopo safe può rendere nuovamente i contenuti non sicuri. Ad esempio, il codice seguente stampa la variabile così com'è, senza caratteri di escape:
+
+	{{ var|safe|escape }}
+
+
+---------
+ safeseq
+---------
+
+Applica il filtro safe ad ogni elemento di una sequenza. Utile insieme ad altri filtri che operano su sequenze, come join. Esempio:
+
+	{{ some_list|safeseq|join:", " }}
+
+Non è possibile utilizzare direttamente il filtro safe in questo caso, poiché prima convertirà la variabile in una stringa, invece di lavorare con i singoli elementi della sequenza.
+
+
+-------
+ slice
+-------
+
+Restituisce una parte dell'elenco.
+
+Utilizza la stessa sintassi dell'affettatura dell'elenco di Python. Per un'introduzione vedasi:
+
+	https://www.diveinto.org/python3/native-datatypes.html#slicinglists
+
+Esempio:
+
+	{{ some_list|slice:":2" }}
+
+Se some_list è ['a', 'b', 'c'], l'output sarà ['a', 'b'].
+
+
+---------
+ slugify
+---------
+
+Converte in ASCII. Converte gli spazi in trattini. Rimuove i caratteri che non sono alfanumerici, trattini bassi o trattini. Converte in minuscolo. Elimina anche gli spazi bianchi iniziali e finali. Esempio:
+
+	{{ value|slugify }}
+
+Se value è "Joel is a slug", l'output sarà "joel-is-a-slug"
+
+
+--------------
+ stringformat
+--------------
+
+Formatta la variabile in base all'argomento, uno specificatore di formattazione della stringa. Questo specificatore utilizza la sintassi di formattazione delle stringhe in stile printf, con l'eccezione che la "%" iniziale viene eliminata. Esempio:
+
+	{{ value|stringformat:"E" }}
+
+Se value è 10, l'output sarà 1.000000E+01
+
+
+-----------
+ striptags
+-----------
+
+Fa tutto il possibile per rimuovere tutti i [X] tag HTML. Esempio:
+
+	{{ value|striptags }}
+
+Se value è "<b>Joel</b> <button>is</button> a <span>slug</span>", l'output sarà  "Joel is a slug"
+
+Si tenga presente che gli striptag non danno alcuna garanzia che il suo output sia sicuro per HTML, in particolare con input HTML non valido. Quindi NON bisogna applicare MAI il filtro safe a un output di striptags. Se si sta cercando qualcosa di più robusto, si può usare la libreria Python bleach, in particolare il suo metodo clean.
+
+
+------
+ time
+------
+
+Formatta un'ora in base al formato specificato.
+
+Il formato specificato può essere quello predefinito TIME_FORMAT o un formato personalizzato, uguale al filtro della data. Notare che il formato predefinito dipende dalla localizzazione. Esempio:
+
+	{{ value|time:"H:i" }}
+
+Se value è equivalente a datetime.datetime.now(), l'output sarà la stringa "01:23".
+
+Notiamo che è possibile usare la forma backslash-escape di una stringa di formato se si desidera utilizzare il valore "grezzo". In questo esempio, sia "h" che "m" sono preceduti da una barra rovesciata, perché altrimenti ognuno sarebbe una stringa di formato che visualizza rispettivamente l'ora e il mese:
+
+	{% value|time:"H\h i\m" %}
+
+Viene visualizzato come "01h 23m".
+
+Un altro esempio. Supponendo che USE_L10N sia True e LANGUAGE_CODE sia, ad esempio, "de", allora per ...
+
+	{{ value|time:"TIME_FORMAT" }}
+
+... l'output sarà la stringa "01:23" (l'identificatore di formato "TIME_FORMAT" per il de locale fornito con Django è "H:i").
+
+Il filtro temporale accetterà solo i parametri nella stringa di formato che si riferiscono all'ora del giorno, non alla data. Se si deve formattare un valore di data, bisogna utilizzare invece il filtro della data (o insieme all'ora se è necessario eseguire il rendering di un valore datetime completo).
+
+Esiste un'eccezione alla regola precedente: quando viene passato un valore datetime con informazioni sul fuso orario allegate (un'istanza datetime che riconosce il fuso orario), il filtro temporale accetterà gli specificatori di formato relativi al fuso orario "e", "O", "T" e "Z".
+
+Se utilizzato senza una stringa di formato, viene utilizzato l'identificatore di formato TIME_FORMAT...
+
+	{{ value|time }}
+
+... equivale a ...
+
+	{{ value|time:"TIME_FORMAT" }}
+
+
+-----------
+ timesince
+-----------
+
+Restituisce un valore di differenza di data e ora a partire da una data di riferimento (ad es. "4 days, 6 hours").
+
+Accetta un argomento opzionale che è una variabile contenente la data da utilizzare come punto di confronto (senza l'argomento, il punto di confronto è adesso). Ad esempio, se blog_date è un'istanza di data che rappresenta la mezzanotte del 1 ° giugno 2006 e comment_date è un'istanza di data per le 08:00 del 1 ° giugno 2006, quanto segue restituirà "8 hours":
+
+	{{ blog_date|timesince:comment_date }}
+
+Il confronto tra offset-date e offset-aware datetime restituirà una stringa vuota.
+
+I minuti rappresentano l'unità più piccola utilizzata e verrà restituito "0 minutes" per qualsiasi data futura rispetto al punto di confronto.
+
+
+-----------
+ timeuntil
+-----------
+
+Simile a timesince, tranne per il fatto che misura il tempo da ora fino alla data o datetime specificata. 
+
+Ad esempio, se oggi è il 1 ° giugno 2006 e conference_date è un'istanza di data del 29 giugno 2006, quanto segue restituirà "4 weeks":
+
+	{{ conference_date|timeuntil }} 
+
+Accetta un argomento opzionale che è una variabile contenente la data da utilizzare come punto di confronto (invece di adesso). Se from_date contiene il 22 giugno 2006, quanto segue restituirà "1 week":
+
+	{{ conference_date|timeuntil:from_date }}
+
+Il confronto tra offset-date e offset-aware datetime restituirà una stringa vuota.
+
+I minuti rappresentano l'unità più piccola utilizzata e verrà restituito "0 minutes" per qualsiasi data futura rispetto al punto di confronto.
+
+
+-------
+ title
+-------
+
+Converte una stringa in titlecase facendo iniziare le parole con un carattere maiuscolo e gli altri caratteri minuscoli. 
+
+Questo tag non fa alcuno sforzo per mantenere "parole banali" in minuscolo. Esempio:
+
+	{{ value|title }}
+
+Se value è "il mio PRIMO post", l'output sarà "Il mio primo post".
+
+
+---------------
+ truncatechars
+---------------
+
+Tronca una stringa se è più lunga del numero di caratteri specificato. 
+
+Le stringhe troncate finiranno con un carattere di ellissi traducibile ("..."). Argomento: numero di caratteri a cui troncare. Esempio:
+
+	{{ value|truncatechars:7 }}
+
+Se value è "Joel is a slug", l'output sarà "Joel i ...".
+
+
+--------------------
+ truncatechars_html
+--------------------
+
+Simile a truncatechars, tranne per il fatto che è a conoscenza dei tag HTML. 
+
+Tutti i tag aperti nella stringa e non chiusi prima del punto di troncamento vengono chiusi immediatamente dopo il troncamento. Esempio:
+
+	{{ value|truncatechars_html:7 }}
+
+Se value è "<p> Joel is a slug </p>", l'output sarà "<p> Joel i ... </p>".
+
+Le nuove righe nel contenuto HTML verranno conservate.
+
+
+---------------
+ truncatewords
+---------------
+
+Tronca una stringa dopo un certo numero di parole. Argomento: numero di parole dopo cui troncare. Esempio:
+
+	{{ value|truncatewords:2 }}
+
+Se value è "Joel is a slug", l'output sarà "Joel is ...".
+
+Le nuove righe all'interno della stringa verranno rimosse.
+
+
+
+--------------------
+ truncatewords_html
+--------------------
+
+Simile a truncatewords, tranne per il fatto che rispetta i tag HTML. Tutti i tag aperti nella stringa e non chiusi prima del punto di troncamento vengono chiusi immediatamente dopo il troncamento.
+
+Questo tag è meno efficiente di truncatewords, quindi dovrebbe essere usato solo quando viene passato del testo HTML. Esempio:
+
+	{{ value|truncatewords_html:2 }}
+
+Se value è "<p> Joel is a slug </p>", l'output sarà "<p> Joel is ... </p>".
+
+Le nuove righe nel contenuto HTML verranno conservate.
+
+
+----------------
+ unordered_list
+----------------
+
+Ricorsivamente prende un elenco auto-annidato e restituisce un elenco non ordinato HTML - SENZA aprire e chiudere i tag <ul>.
+
+Si presume che l'elenco sia nel formato corretto. Ad esempio, se var contiene ...
+
+	['States', ['Kansas', ['Lawrence', 'Topeka'], 'Illinois']]
+
+... allora il tag ...
+
+	{{ var|unordered_list }}
+
+... restituirà:
+
+	<li>States
+		<ul>
+			<li>Kansas
+				<ul>
+					<li>Lawrence</li>
+					<li>Topeka</li>
+				</ul>
+			</li>
+			<li>Illinois</li>
+		</ul>
+	</li>
+
+
+-------
+ upper
+-------
+
+Converte una stringa in tutta maiuscola. Esempio:
+
+	{{ value|upper }}
+
+Se value è "Joel is a slug", l'output sarà "JOEL IS A SLUG".
+
+
+-----------
+ urlencode
+-----------
+
+Applica valori di escape per l'utilizzo in un URL. Esempio:
+
+	{{ value|urlencode }}
+
+Se value è "https://www.example.org/foo?a=b&c=d", l'output sarà "https%3A//www.example.org/foo%3Fa%3Db%26c%3Dd"
+
+Può essere fornito un argomento opzionale contenente i caratteri che non devono essere sottoposti a escape.
+
+Se non viene fornito, il carattere "/" viene considerato sicuro. È possibile fornire una stringa vuota quando tutti i caratteri devono essere sottoposti a escape. Esempio:
+
+	{{ value|urlencode:"" }}
+
+Se value è "https://www.example.org/", l'output sarà "https%3A%2F%2Fwww.example.org%2F"
+
+
+--------
+ urlize
+--------
+
+Converte URL e indirizzi e-mail nel testo in collegamenti cliccabili.
+
+Questo tag template funziona sui link con prefisso http://, https:// o www... Ad esempio, https://goo.gl/aia1t verrà convertito, invece goo.gl/aia1t non verrà convertito.
+
+Supporta anche i collegamenti domain-only che terminano in uno dei domini di primo livello originali (.com, .edu, .gov, .int, .mil, .net e .org). Ad esempio, "djangoproject.com" viene correttamente convertito.
+
+I collegamenti possono avere punteggiatura finale (punti, virgole, parentesi chiuse) e punteggiatura iniziale (parentesi iniziali) e urlize continuerà ad operare correttamente.
+
+I collegamenti generati da urlize hanno un attributo aggiunto rel="nofollow". Esempio:
+
+	{{ value|urlize }}
+
+Se value è "Check out www.djangoproject.com", l'output sarà:
+
+	Check out <a href="http://www.djangoproject.com" rel="nofollow">
+			  www.djangoproject.com </a>
+
+Oltre ai link web, urlize converte anche gli indirizzi email in mailto:link
+
+Se value è "Invia domande a foo@example.com", l'output sarà 
+
+	Invia domande a <a href="mailto:foo@example.com"> foo@example.com </a>"
+
+Il filtro urlize accetta anche un parametro opzionale, autoescape. Se autoescape è True, il testo del link e gli URL verranno sottoposti a escape utilizzando il filtro di escape integrato di Django. Il valore predefinito per l'autoescape è True.
+
+Nota. Se urlize viene applicato al testo che contiene già markup HTML o agli indirizzi email che contengono virgolette singole ('), le cose non funzioneranno come previsto. Applicare questo filtro solo al testo normale.
+
+
+-------------
+ urlizetrunc
+-------------
+
+Converte gli URL e gli indirizzi e-mail in link cliccabili proprio come urlize, ma tronca gli URL più lunghi del limite di caratteri specificato. Argomento: il numero di caratteri dove il testo deve essere troncato, inclusi i puntini di sospensione aggiunti se è necessario il troncamento. Esempio:
+
+	{{ value|urlizetrunc:15 }}
+
+Se value è "Check out www.djangoproject.com", l'output diventa:
+
+	Check out <a href="http://www.djangoproject.com" rel="nofollow">
+			  www.djangoproj ... </a>
+	
+Come con urlize, questo filtro dovrebbe essere applicato solo al testo normale.
+
+
+-----------
+ wordcount
+-----------
+
+Restituisce il numero di parole. Esempio:
+
+	{{ value|wordcount }}
+
+Se value è "Joel is a slug", l'output sarà 4.
+
+
+----------
+ wordwrap
+----------
+
+Esegue il wrapping delle parole alla lunghezza di riga specificata. Argomento: numero di caratteri in corrispondenza dei quali avvolgere il testo. Esempio:
+
+	{{ value|wordwrap:5 }}
+
+Se value è  "Joel is a slug", l'output sarebbe:
+
+	Joel
+	is a
+	slug
+
+
+-------
+ yesno
+-------
+
+Associa i valori di True, False e (facoltativamente) None alle stringhe "yes", "no", "maybe" o a una mappatura personalizzata passata come elenco separato da virgole e restituisce una di queste stringhe in base al valore. Esempio:
+
+	{{	value|yesno:"yeah,no,maybe" }}
+
+Casi di esempio sono i seguenti:
+
+	Valore	Argomento			Output
+	-----------------------------------
+	True						yes
+	True	"yeah,no,maybe"		yeah
+	False	"yeah,no,maybe"		no
+	None	"yeah,no,maybe"		maybe
+	None	"yeah,no"			no 
+
+None è convertito in falso se non viene fornita alcuna mappatura per esso.
+
+
+
+Tag e filtri di internazionalizzazione
+======================================
+
+Django fornisce tag e filtri per i modelli per controllare ogni aspetto dell'internazionalizzazione nei modelli. Essi consentono un controllo granulare di traduzioni, formattazione e conversioni di fuso orario.
+
+
+------
+ i18n
+------
+
+Questa libreria consente di specificare testo traducibile nei modelli. Per abilitarlo, impostare USE_I18N su True, quindi caricarlo con {% load i18n %}.
+Vedere Internazionalizzazione nel codice del template in  https://docs.djangoproject.com/en/3.1/topics/i18n/formatting/#topic-l10n-templates
+
+
+------
+ l10n
+------
+
+Questa libreria fornisce il controllo sulla localizzazione dei valori nei modelli. Bisogna solo caricare la libreria utilizzando {% load l10n %}, ma spesso si dovrà impostare USE_L10N su True in modo che la localizzazione sia attiva per impostazione predefinita.
+
+Vedere Controllo della localizzazione nei modelli in https://docs.djangoproject.com/en/3.1/topics/i18n/formatting/#topic-l10n-templates
+
+
+----
+ tz
+----
+
+Questa libreria fornisce il controllo sulle conversioni di fuso orario nei modelli. Come l10n, bisogna solo caricare la libreria utilizzando {% load tz %}, ma di solito si imposterà anche USE_TZ su True in modo che la conversione all'ora locale avvenga per impostazione predefinita.
+
+Consultare Output in grado di riconoscere il fuso orario nei modelli in https://docs.djangoproject.com/en/3.1/topics/i18n/timezones/#time-zones-in-templates
+
+
+
+Altre librerie di tag e filtri
+================================
+
+Django viene fornito con un paio di altre librerie di template tag da abilitare esplicitamente nella propria impostazione INSTALLED_APPS e abilitare nel proprio template con il tag {% load %}.
+
+
+-------------------------
+ django.contrib.humanize
+-------------------------
+
+Una serie di filtri per template Django utili per aggiungere un "tocco umano" ai dati. Vedasi django.contrib.humanize su https://docs.djangoproject.com/en/3.1/ref/contrib/humanize/
+
+--------
+ static
+--------
+
+
+static
+
+Per collegarsi a file statici salvati in STATIC_ROOT Django viene fornito con il template tag  static. Se è installata l'app django.contrib.staticfiles, il tag servirà i file utilizzando il metodo url() dello storage specificato da STATICFILES_STORAGE. Esempio:
+
+	{% load static %}
+	<img src="{% static 'images/hi.jpg' %}" alt="Hi!">
+
+È anche in grado di utilizzare variabili di contesto standard, ad es. supponendo che una variabile user_stylesheet sia passata al template:
+
+	{% load static %}
+	<link rel="stylesheet" href="{% static user_stylesheet %}" type="text/css" media="screen">
+
+
+Se desideriamo recuperare un URL statico senza visualizzarlo, possiamo utilizzare una chiamata leggermente diversa:
+
+	{% load static %}
+	{% static "images/hi.jpg" as myphoto %}
+	<img src="{{ myphoto }}">
+
+Se si usano i template Jinja2, vedasi Jinja2 per informazioni sull'utilizzo del tag statico con Jinja2 in https://docs.djangoproject.com/en/3.1/topics/templates/#django.template.backends.jinja2.Jinja2
+
+
+-------------------
+ get_static_prefix
+-------------------
+
+E' preferibile usare il template tag static, ma se si ha bisogno di un maggiore controllo esattamente su dove e come STATIC_URL debba essere inserito nel template, possiamo utilizzare il template tag get_static_prefix:
+
+	{% load static %}
+	<img src="{% get_static_prefix %}images/hi.jpg" alt="Hi!">
+
+C'è anche un secondo modulo che possiamo utilizzare per evitare un'elaborazione aggiuntiva se abbiamo bisogno dello stesso valore più volte:
+
+	{% load static %}
+	{% get_static_prefix as STATIC_PREFIX %}
+
+	<img src="{{ STATIC_PREFIX }}images/hi.jpg" alt="Hi!">
+	<img src="{{ STATIC_PREFIX }}images/hi2.jpg" alt="Hello!">
+
+
+------------------
+ get_media_prefix
+------------------
+
+Simile a get_static_prefix, get_media_prefix popola una variabile di template con il prefisso multimediale MEDIA_URL, ad esempio:
+
+	{% load static %}
+	<body data-media-url="{% get_media_prefix %}">
+
+Memorizzando il valore in un attributo di dati, ci assicuriamo che sia sottoposto a escape in modo appropriato se vogliamo utilizzarlo in un contesto JavaScript.

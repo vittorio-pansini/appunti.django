@@ -1,0 +1,279 @@
+*****************************
+05 - Gestione delle immagini
+     [1.2.0]
+*****************************
+
+
+In questo capitolo andremo ad ampliare l'uso della nostra homepage dinamica, aggiungendo una gestione delle immagini.
+
+Queste immagini saranno aggiunte al nostro database e saranno gestibili attraverso la finestra di admin.
+
+Prima di procedere, accertiamoci che la tabella Post di Feed sia completamente vuota, perchè vogliamo partire da una situazione "pulita"; a questo scopo entriamo nella pagina dell'amministratore e svuotiamo letteralmente la nostra tabella Post.
+
+
+Creazione di una pagina di gestione delle immagini
+--------------------------------------------------
+
+Se non si provvede a definire un percorso specifico per la loro memorizzazione, le immagini e i file che vengono caricati sul sito dagli utenti vanno a finire nella root del nostro progetto, creando evidentemente dello scompiglio.
+
+A tale scopo, prima di procedere con la tecnica di gestione delle immagini, andiamo a creare e configurare un percorso di gestione che chiameremo [media].
+
+Apriamo il file ... /Hello/Hello/settings.py  ed andiamo ad inserire una variabile appena sopra la sezione INSTALLED_APPS:
+
+	MEDIA_URL = '/media/'
+	MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
+	
+Si noti che è la stessa sintassi che abbiamo usato per definire il percorso [template] e dunque ricordiamo che all'inizio del file deve esserci la import della libreria Python os.
+
+La prima variabile sarà usata nella definizione dell'url del sito, la seconda, ovviamente, dove i dati verranno fisicamente disposti all'interno del nostro sito.
+
+
+La configurazione continua con la modifica del file  .../Hello/Hello/urls.py  nel quale andremo prioritariamente ad aggiungere due import
+
+	from django.conf import settings
+	from django.conf.urls.static import static
+
+... il primo che importa il contenuto di settings.py dove abbiamo settato le variabili, il secondo che ci consentirà di manipolarle in modo statico.
+
+Quindi in coda al file aggiungiamo il seguente codice:
+
+	if settings.DEBUG:
+		urlpatterns += static(settings.MEDIA_URL, document_root = settings.MEDIA_ROOT)
+
+La variabile DEBUG si riferisce all'errore che avviene quando non viene trovata una particolare risorsa; gestire l'effetto di questa variabile ci consente di prevedere gli errori e gestirli.
+
+L'istruzione successiva aggiunge alla lista urlpatterns la coppia di elementi MEDIA_URL e MEDIA_ROOT.
+
+Riavviamo il gestore del nostro progetto col solito  "python manage.py runserver"  e tutte le impostazioni verranno acquisite.
+
+Da questo momento in poi tutti gli elementi multimediali caricati dall'amministratore o dalla nostra applicazione verranno gestiti in una cartella chiamata media e che si trova nella root del nostro progetto.
+
+Va detto che questo non è il modo migliore per gestire i file multimediali e può portare a vulnerabilità, tuttavia per ora è tutto quello che ci serve per proseguire.
+
+
+Installazione del package sorl-thumbnail per la gestione delle immagini
+-----------------------------------------------------------------------
+
+Creato preliminarmente il nostro percorso di gestione, vediamo ora come gestire i nostri file multimediali.
+
+Per applicare questo esempio predisponiamo alcune immagini jpeg di esempio in una cartella a parte, possibilmente di forma quadrata e senza una particolare risoluzione, anzi possiamo predisporle con una risoluzione alta.
+
+
+Django gestisce le immagini, ma non nel modo che intendiamo attuare, pertanto, come quasi norma nella gestione delle applicazioni django, andremo ad installare un package esterno, che servirà allo scopo.
+
+Con Google cerchiamo un package che gestisca i thumbnail e possa andare bene per la versione 3.1 di Django; questo perchè abbiamo bisogno che le immagini da presentare a video siano dimensionate correttamente.
+
+Allo scopo useremo il package di jazzband chiamato "sorl-thumbnail".  Il pacchetto gestisce Python 3 e Django 3.1, consente lo storage, supporta PIL e il suo corrispondente PILLOW (librerie per la gestione delle immagini), la gestione da admin, così come leggiamo nella documentazione.
+
+Procediamo alla sua installazione, insieme a quella di pillow (che ricordiamo è un derivato identico di pil):
+
+	()$ pip install sorl-thumbnail
+	()$ pip install Pillow				(P maiuscola!)
+	
+... quindi inseriamo sorl-thumbnail nel nostro progetto, agendo sul file .../Hello/Hello/settings.py   dove lo andremo ad aggiungere fra le applicazioni esistenti, dunque nella sezione INSTALLED_APPS
+
+	INSTALLED_APPS = [
+		....
+		'sorl.thumbnail',				#
+		
+		'feed',
+	]
+
+Poi, sempre leggendo la documentazione, cerchiamo le istruzioni di come il nostro pacchetto gestisce i modelli (ovvero le voci di database).
+
+Dato che dobbiamo caricarle nel nostro database, il primo file da modificare è .../Hello/feed/models.py  dove aggiungiamo l'import di gestione ...
+
+	from sorl.thumbnail import ImageField
+	
+... quindi nella classe presistente aggiungiamo la gestione di una immagine ...	
+
+	class ....
+		text ....
+
+		image = models.ImageField()		#
+
+
+Come già visto nel capitolo 3, operiamo la creazione e l'applicazione della migrazione per integrare la nuova colonna in "Feed"..
+
+	()$ python manage.py makemigrations
+	.....
+	
+Durante la migrazione la libreria può chiederci delle informazioni aggiuntive, pertanto è raccomandato leggere attentamente la documentazione per rispondere a domande riguardo valori di Default. Nell'esempio riportato successivamente, Django ci fa presente che si sta tentando di aggiungere un campo "immagine" da pubblicare che non accetta valori nulli ma senza un valore predefinito e dunque ci chiede di definire un valore di default.
+
+Questo possiamo farlo specificando tale valore fra i parametri; la documentazione ad esempio ci suggerisce di usare ImageField(upload_to='whatever'), ma vediamo qui sotto un sistema che ci permette di aggirare il problema in modo più elastico.
+
+Nel nostro caso, quando ci viene chiesto che tipo di valore di default vogliamo, risponderemo "1" alla prima domanda, cioè che vogliamo rispondere "una tantum" dando un valore di default ed ancora "1" quando ci compare il prompt di Python; quest'ultimo sarà il valore di default, quindi se non sarà registrata alcuna immagine, il campo sarà riempito automaticamente dal valore "1".
+
+	You are trying to add a non-nullable field 'image' to post without a default; we can't do that (the database needs something to populate existing rows).
+
+	Please select a fix:
+	 1) Provide a one-off default now (will be set on all existing rows with 
+	    a null value for this column)
+	 2) Quit, and let me add a default in models.py
+	Select an option: 1
+
+	Please enter the default value now, as valid Python
+	The datetime and django.utils.timezone modules are available, 
+	    so you can do e.g. timezone.now
+	Type 'exit' to exit this prompt
+	>>> 1
+
+	Migrations for 'feed':
+	  feed\migrations\0002_post_image.py
+		- Add field image to post
+
+
+Verrà creato un nuovo file del tipo 002_post_image.py che richiamerà sempre quello che abbiamo creato nel capitolo 3 e lo integrerà col nuovo campo di gestione dell'immagine.
+
+Non rimane che chiudere il cerchio con una nuova migrazione.
+	
+	()$ python manage.py migrate
+	.....
+
+Riavviamo Django ed entriamo nella gestione di admin, dove troveremo cambiata la tabella Post, perchè è stata aggiunta la possibilità di caricare e di visualizzare delle immagini, anche se, al momento, si tratta solo di un preview.
+
+
+Uso delle immagini nei template
+-------------------------------
+
+Non ci resta che fare in modo che le immagini vengano caricate nei template e, nel nostro esempio, proprio nella nostra homepage.
+
+Per prima cosa andiamo a caricare almeno tre o quattro immagini nel nostro database, inserendo dei commenti a piacere e caricando le immagini che avevamo messo da parte all'inizio.
+
+Fatto questo, apriamo e modifichiamo il "loop" nel nostro file .../Hello/templates/home.html
+
+	{% block corpoPagina %} 
+		{% for post in posts %}
+			{{ post.text }} <br>			 
+			{{ post.image }} - {{ post.image.url }} <br>		
+			<img src = "{{ post.image.url }}" >
+			<hr>
+		{% endfor %}
+	{% endblock %}
+
+I blocchi post.image e post.image.url restituiscono rispettivamente nome e url locale dell'immagine; quest'ultima viene poi sfruttata nella classica rappresentazione dell'immegine così come gestita da HTML5 (img src=...).
+
+Tuttavia il risultato è semplicemente inaccettabile perchè va a renderizzare tutta l'immagine che, se di diversi megabyte, occupa l'intero schermo ed oltre, con dispendio di risorse per il caricamento e la rappresentazione.
+
+Abbiamo bisongo che l'immagine sia rielaborata in forma di thumbnail, per l'appunto.
+
+Torniamo a leggere la documentazione di sorl-thumbnail nella sezione "usage" e, come da istruzioni, inseriamo in cima ad home.html l'istruzione ....
+
+	{% load thumbnail %}
+
+... che estende il linguaggio per modelli di Django, aggiungendo i tag necessari a gestire in modo appropriato le nostre immagini.
+
+Andiamo a sostituire quindi nel corpo del ciclo for...endfor l'elemento che fa apparire l'immagine, lasciando una intestazione e la linea di divisione, con il gruppo di template tags che consentono di visualizzare i nostri thumbnail in modo appropriato:
+
+	{% .....
+		{% for .....
+			{{ post.text }} <br>			 
+			{% thumbnail post.image "200x200" crop="center" as im %}
+				<img src="{{ im.url }}" width="{{ im.width }}" height="{{ im.height }}">
+			{% endthumbnail %}
+			<hr>
+		{% endfor %}
+	{% .....
+
+Al centro del blocco di template tag thumbnail...endthumbnail troviamo un tag HTML che riceve i dati necessari e l'immagine stessa, ridotta delle dimensioni occorrenti affinchè venga visualizzata in modo adeguato.  La sintassi dei tempate tag dipende dalla libreria in uso.
+
+La libreria si occuperà di creare una immagine ridimensionata (sfruttando PIP o PILLOW) e la renderà disponibile nella cache della pagina che verrà visualizzata a video.
+
+
+Creare la finestra di dettaglio delle immagini
+----------------------------------------------
+
+Il nostro prossimo passo è quello di fare in modo che le immagini caricate nella pagina dei thumbnail vengano aperte in un'altra finestra al click del mouse, una pagina di "detail view".
+
+Per l'appunto useremo la classe DetailView, una classe già messe a disposizione da Django e che troviamo ben documentata nel sito http://ccbv.co.uk 
+
+Apriamo il file .../Hello/feed/views.py ed aggiungiamo la classe DetailView all'import iniziale ed aggiungiamo una nuova classe:
+
+	from django.views.generic import TemplateView, DetailView
+	......
+	class PostDetailView(DetailView):
+		template_name = "detail.html"
+		model = Post
+
+Come per la precedente classe template_name è la pagina html che verrà fisicamente richiamata, mentre model è una istanza di oggetto di tipo Post, definita in questo stesso file e che serve evidentemente per gestire l'immagine come singolo oggetto e non come riferimento di url o altro (questo è uno dei grandi vantaggi nell'approccio object oriented in Django).
+
+Andiamo ad aggiungere PostDetailView fra gli import e una nuova url nel file .../Hello/feed/urls.py ...
+
+	....
+	from .views import HomePageView, PostDetailView
+	...
+		path('detail/<int:pk>/', PostDetailView.as_view(), name='detail'),
+	...
+
+... dove <int:pk> verrà sostituito con il primary key dell'immagine da gestire durante l'uso e in modo automatico.  Naturalmente useremo il metodo as_view() della classe PostDetailView, ereditato a sua volta dalla classe DetailView().
+
+Non ci resta che creare il template (ovvero la pagina web) detail.html, file che andiamo a creare nel percorso .../Hello/templates/
+
+	{% extends "base.html" %}
+
+	{% block title %} Dettaglio immagini {% endblock %}
+
+	{% block corpoPagina %} 
+		<h3> Testo </h3>
+		{{ object.text }}
+		<h3> Immagine </h3>
+		<img src="{{ object.image.url }}" style='width:100; heigh:auto;'>
+	{% endblock %}
+
+E' evidente che per creare un buon template è necessaria una buona conoscenza dell'HTML e, al limite possiamo usare bootstrap per migliorare la gestione.
+
+
+Rendere le immagini cliccabili e richiamare la finestra di dettaglio
+--------------------------------------------------------------------
+
+Facciamo in modo che ciascuna thumbnail della homepage sia cliccabile, incominciando a creare un riferimento.
+
+Apriamo allora il relativo template .../Hello/templates/home.html  ed aggiungiamo la riga nel ciclo ...
+
+	{% .....
+		{% for .....
+			<a href="{% url 'feed:detail' post.id %}">Apri immagine</a>
+			.....
+			<hr>
+		{% endfor %}
+	{% .....
+
+Abbiamo inserito sostanzialmente un hyperlink che farà riferimento alla pagina che conterrà la nostra immagine ingrandita; in sostanza al tag html <a href ...> viene passato un parametro che viene composto da Django tramite la funzione url.
+
+Alla funzione url viene passato 'feed:detail' che sta ad indicare l'oggetto 'detail' definito nel namespace 'feed'.
+
+Ricordiamo infatti che la homepage è definita col namespace 'feed' che abbiamo indicato appunto nella riga che definisce la homepage, nel file  .../Hello/Hello/urls.py
+
+Django leggerà il namespace 'feed' e lo andrà a cercare nel file urls.py che conterrà   app_name = 'feed'  ed andrà quindi a cercare l'url il cui nome di oggetto è appunto 'detail'. Nel nostro caso Django aggancerà il namespasce nel file  .../Hello/feed/urls.py  ed andrà a leggere la url nella lista urlpatterns[] dove troverà il parametro name='detail' che abbiamo messo fra i parametri del path, restituendo "/detail/".
+
+La url verrà completata leggendo l'id dall'oggetto post attualmente "puntato", quindi il risultato finale sarà una url del tipo "localhost:8000/detail/39/" con 39 che è l'id di esempio dell'immagine da mostrare.
+
+Abbiamo scelto la strada apparentemente più complessa, ma in realtà più opportuna per agganciare la pagina.
+
+Sfruttando HTML direttamente, avremmo potuto scegliere di gestire la chiamata usando il tag {{ post.id }}  collegando un hiperlink del tipo  /detail/{{ post.id }}  ma non è la strada più giusta se vogliamo rendere il nostro progetto indipendente da una struttura fisica predefinita;  se decidiamo domani di modificare il percorso da "detail" a "dettagli" siamo costretti a fare attenzione a tutti i punti del codice dove questo è definito e ciò non è agevole.  Se cambiamo infatti in   .../Hello/feed/urls.py  proprio il nome della url (primo parametro) da "details" in "dettagli, il risultato sarà quello di avere automaticamente tradotto l'url visibile dall'utente sul browser, senza perdere il riferimento con l'oggetto: "localhost:8000/dettagli/39/"
+
+Se vogliamo rendere sia il testo che l'immagine cliccabili, la modifica in  .../Hello/templates/home.html  sarà leggermente diversa ...
+
+	{% .....
+		{% for .....
+			<a href="{% url 'feed:detail' post.id %}" style='display: inline-block;'>
+				{{ post.text ......
+				.....
+				{% endthumbnail %}
+			</a>
+			<hr>
+		{% endfor %}
+	{% .....
+
+
+Completiamo la funzionalità della pagina dei dettagli ponendo un link per tornare a quella dei thumbnail.  Aggiungiamo allora la seguente riga nel corpo del file .../Hello/templates/detail.html
+
+	.....
+	{% block corpoPagina %}
+		<a href="{% url 'feed:index' %}"> &larr; Indietro </a>
+		.....
+	{% endblock %}
+
+Come al solito abbiamo la funzione tag url che richiama la pagina index, stavolta senza passare ulteriori parametri.
+
+Il resto è HTML con &larr che mostra la freccia a sinistra insieme alla parola "Indietro" che forma il link.

@@ -1,0 +1,180 @@
+**********************************
+ 09 - Gestione degli static files
+      [1.1.0]
+**********************************
+
+Dato che un'applicazione web con un semplice HTML è piuttosto limitante, spesso sono usati fogli di stile a cascata (CSS) e delle immagini, per migliorarne l'aspetto, ed è possibile aggiungere l'interazione con JavaScript; tutti questi elementi aggiuntivi costituiscono un gruppo di file che chiamiamo static files (file statici).
+
+Un esempio di file statico può essere, ad esempio una immagine di sfondo o il logo della nostra azienda.
+
+La gestione dei file statici è un elemento importante nella gestione di un sito web, non solo di Django, in quanto esiste una profonda differenza fra essi e gli altri elementi che sono, invece, dinamici, ad esempio le pagine HTML, che, come sappiamo, vengono costruite nel momento in cui bisogna restituire un HTTP response.
+
+Fino a quando il sito è in fase di sviluppo, dove un solo sviluppatore o pochi accedono alla risorsa statica è ancora accettabile che il caricamento ad esempio uno sfondo, possa creare un minimo di rallentamento, ma nel momento in cui il sito sarà pubblicato sul web, possono verificarsi problemi e il sito può bloccarsi.
+
+Questo accade perchè non possiamo affidare al solo file system della macchina il carico di lavoro di puntare e leggere le risorse statiche ogni volta che serve, semplicemente perchè è inadeguato a gestire da solo migliaia se non milioni di risposte quando servono.
+
+Durante lo sviluppo, i file statici che vengono creati sulla macchina dello sviluppatore devono essere spostati sul server Web di produzione e distribuiti in modo diverso dalle pagine web e questi repository devono poter essere gestiti in modo da consentire di essere slegati dal sistema operativo stesso.
+
+Per i siti di un certo livello esistono diversi siti di hosting chiamati  Content Delivery Network (CDN)  costruiti apposta per gestire la "consegna" di file sul web, liberando il file system del server su cui è poggiato il sito e operando in modo molto più efficiente; ad esempio esistono sistemi CDN come nginx (si legge "engine-ex"), che offrono servizi come reverse proxy, load balancer, cache HTTP e proxy di posta elettronica (IMAP / POP3).
+
+Questo può rappresentare un problema per l'enorme lavoro richiesto per spostare i file sul server esterno e per la manutenzione delle pagine web che devono puntare su ciascuno, ad esempio quello di apportare modifiche all'URL da cui vengono serviti i file statici potrebbe significare aggiornare i valori in tutto il codice.
+
+Django può gestire le risorse statiche per noi per semplificare questo processo, fornendo una serie di strumenti inclusi nel suo server di sviluppo; quando l'applicazione deve essere pubblicata, può anche raccogliere tutte le risorse e copiarle in una cartella per l'hosting di un server web dedicato, consentendo di mantenere i file statici separati in modo significativo durante lo sviluppo e di raggrupparli automaticamente per la distribuzione.
+
+Questa funzionalità è fornita dall'app staticfiles integrata in Django, che aggiunge diverse funzioni utili per lavorare e servire file statici:
+
+	• Il templeate tag  static  per creare automaticamente l'URL statico di una risorsa da includere nel codice HTML. Questo tag viene utilizzato per convertire un nome file in una URL o in un percorso che può essere utilizzato in un modello, ad esempio, da logo.png a /static/logo.png
+
+	• Una view (chiamata anche essa static) che serve i file statici in fase di sviluppo. La view static riceve una richiesta per caricare il file statico nel percorso /static/logo.png. Legge il file e lo invia al browser.
+
+	• Dei gestori per la ricerca dei file statici (static file finder) per personalizzare la posizione delle risorse nel filesystem, detti finder; uno di questi finder di file statici viene utilizzato dalla view static per individuare il file statico sul disco. Esistono diversi finder, ma nel nostro esempio il finder converte semplicemente il percorso dalla URL /static/logo.png al percorso su disco myApp/static/logo.png
+
+	• Il comando di gestione collectstatic, che trova tutti i file statici e li sposta in un'unica directory per la distribuzione; il comando di gestione collectstatic copierà il nostro file di esempio logo.png dalla directory della app del progetto, ad esempio myApp, ad una directory del server web, come /var/www/myApp/static/logo.png.
+
+	• Il comando di gestione findstatic, che mostra quale file statico su disco viene caricato in seguito ad una particolare richiesta; questo è utile anche per eseguire il debug nel caso un particolare file non venga caricato. Se un file statico non funziona (ad esempio, una richiesta per esso restituisce una risposta 404 Not Found, o viene servito il file sbagliato), allora possiamo usare il comando di gestione findstatic per provare a determinare il motivo. Questo comando prende il nome del file come parametro e mostrerà quali directory sono state esaminate e dove è stato in grado di individuare il file richiesto.
+
+Negli esercizi e nelle attività di questo capitolo, aggiungeremo file statici (immagini e CSS) alla nostra applicazione e ogni file verrà archiviato all'interno della directory del progetto durante lo sviluppo; vediamo come procedere in pratica.
+
+
+Come detto, Django NON implementa funzioni per la gestione web dei file statici, ma prevede prevede una gestione dei files statici che potremmo definire "di prova", che funziona in modalità DEBUG e che potrà successivamente essere sostituita da una definitiva in fase di rilascio.
+
+Per prima cosa dobbiamo accertarci che questa modalità sia attiva, controllando che nel file settings.py della root del progetto siano presenti queste due condizioni:
+
+	• Sia attiva la modalità debug cioè sia  DEBUG = True
+
+	• Sia presente fra le app installate, quella che gestisce i file statici, cioè nell'elenco di  INSTALLED_APP  sia presente anche  'django.contrib.staticfiles'
+
+Queste due condizioni sono in realtà quelle di default, quando viene creato un nuovo progetto Django.
+
+La terza cosa di cui dobbiamo occuparci è la definizione delle variabili STATIC_URL e STATICFILES_DIRS, in fondo al file settings.py e costruite nel modo in cui preferiamo, possibilmente usando assegnazioni che consentano di essere slegati dal sistema operativo e dal percorso fisico in cui questi files statici vengono inseriti, ad esempio:
+
+	STATIC_URL = '/static/'
+
+	STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+
+Ricordiamo che BASE_DIR restituisce il percorso fisico dove si trova il nostro progetto e nella forma prevista dal sistema operativo dove viene eseguito, quindi STATICFILES_DIRS contiene qualcosa del tipo "var/www/Hello/Hello/static".
+
+Questa lista può essere ulteriormente personalizzata, per consentire di agganciare anche elementi che sono al di fuori del progetto Django oppure per avere maggiore libertà nella gestione delle varie risorse; ad esempio possiamo avere qualcose del tipo:
+
+	STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')
+		('images', os.path.join(BASE_DIR, 'static_images')),
+		('css', os.path.join(BASE_DIR, 'static_css')) ]
+
+... e le risorse potrebbero essere gestite in modo più pulito, ad esempio, come vederemo tra poco, nel richiamo possiamo indicare 'images/miaimmagine.jpg' che va ad agganiciare l'immagine di .../static/static_images/miaimmagine.jpg.	
+
+Qualsiasi URL che andremo ad utilizzare del tipo settings.STATIC_URL (che è di fatto '/static/' per default) verrà mappato nella view static dallo static file finder; in questo caso abbiamo indicato il percorso fisico che sarà {root}/{progetto}/static ad esempio ../Hello/static
+
+Andiamo a creare fisicamente il percorso static sotto ../Hello/ ed inseriamo dentro altre cartelle che potranno essere utilizzate per aggiungere i nostri file statici, Dunque all'interno di static andremo a creare una cartella img una cartella Javascript ed una cartella CSS, tipicamente ...
+
+	../Hello/Hello/static/css
+	../Hello/Hello/static/imgs
+	../Hello/Hello/static/jscript
+
+Questo risulta molto comodo nel momento in cui dobbiamo andare a creare dei file specifici per funzione.
+
+Il passo successivo è quello di inserire il comando "load static" all'interno del file di base del nostro template; subito dopo l'header del file HTML andiamo ad aggiungere la nostra istruzione, come nell'esempio che segue:
+
+	<! DOCTYPE html>
+	<html lang=it>
+		{% load static %}
+	
+	<head>
+	.............
+
+Con "load static" andiamo a dire a Django di caricare nel nostro template dei tag aggiuntivi, in questo caso, per gestire i file statici; il tag load infatti serve proprio ad integrare i tag che Django mette a disposizione per la gestione dei template con quelli messi a disposizione da librerie aggiuntive (e noi ne stiamo usando una, anche se inclusa).
+
+Per inciso, possiamo avere più di una libreria da integrare e in questo caso l'istruzione sarebbe la seguente:
+
+	{% load libreria_1 libreria_2 ... libreria_n %}
+
+Ad esempio se abbiamo inserito un file .CSS all'interno del relativo percorso possiamo richiamarlo con la seguente istruzione:
+
+	<head>
+		....
+		<link rel="stylesheet" href="{% static 'css/mioFileCss.css' %}" />
+		...
+	</head>
+
+In questo caso Django sa perfettamente dove andare a recuperare il contenuto di static e quindi non avremmo nessuna difficoltà ad agganciare il percorso e il file CSS indicati. Nel nostro caso il percorso fisico è:
+
+	../Hello/Hello/static/css/mioFileCss.css
+
+Quelli che abbiamo appena definito naturalmente sono i file statici a livello di progetto. La verità è che noi possiamo definire dei file statici anche a livello di applicazione; partiamo dalla definizione della cartella che riguarda la nostra applicazione.
+
+Facciamo ancora riferimento al percorso feed del progetto Hello, e andiamo a creare un percorso static che si trova all'interno della cartella della app ed ancora all'interno del percorso static andiamo a creare prima un'altra cartella che ha lo stesso nome della app quindi, nel nostro caso la cartella feed (cioè lo stesso nome della cartella della app) e quindi, al suo interno le altre sottocartelle che ci interessano, così come abbiamo fatto per il percorso del progetto principale; quindi avremo:
+
+	.../Hello/feed/static/feed/imgs/
+	.../Hello/feed/static/feed/jscript/
+	.../Hello/feed/static/feed/css/
+
+Quando Django andrà ad utilizzare la app dovrà fare riferimento agli elementi statici che sono contenuti all'interno di queste cartelle.
+
+Notiamo che all'interno della cartella static della app, nel nostro caso feed, abbiamo dovuto creare una ulteriore cartella che ha lo stesso nome della app di riferimento infatti sotto  .../Hello/feed/  abbiamo dovuto creare   /static/feed/  e non soltanto /static/ .
+
+In pratica nel percorso è replicato di nuovo il nome della app, prima dei relativi contenuti, un particolare cui porre particolare attenzione e che differisce dal fare riferimento ai file statici della root.
+
+Volendo riepilogare, se vogliamo agganciare il file logo.png "generale" dovremmo porlo nel percorso ...
+
+	.../Hello/Hello/static/imgs/logo.png
+	
+... e richiamarlo con il tag ...
+
+	{% static '/imgs/logo.png' %}
+
+... mentre se vogliamo agganciare il file logo.png specifico della app feed dovremmo porlo nel percorso ...
+
+	.../Hello/feed/static/feed/imgs/logo.png
+
+... e richiamarlo con il tag ...
+
+	{% static 'feed/imgs/logo.png' %}
+
+In questo modo possiamo definire un percoso statico per ciascuna app in aggiunta a quella generale del progetto; il perchè di questa regola un po' dubbia (e a tratti insensata) non è ben spiegato nella documentazione che si limita a descriverla. 
+
+Bisogna tuttavia fare attenzione a questo particolare, altrimenti i file statici NON verranno correttamente agganciati.
+
+
+Verifica dei file statici con il comando findstatic
+---------------------------------------------------
+
+E' possibile verificare che uno o più file statici siano correttamente raggiungibili dal nostro progetto tramite il comando findstatic, il cui significato e scopo d'uso sono abbastanza intuitivi.
+
+Per verificare e vedere dove si trova il file logo.png, ad esempio, digitiamo:
+
+	python3 manage.py findstatic logo.png
+
+Python ci mostrerà il percorso completo dove si trova il file oppure l'errore "No matching..."	
+
+La chiamata va fatta esattamente nello stesso modo con cui andiamo a richiedere il file statico, ad esempio:
+
+	python manage.py findstatic css\sb-admin-2.min.css
+
+... se trovato, Django risponde ad esempio come segue:
+
+	Found 'css\sb-admin-2.min.css' here:
+		D:\PROGETTI\TESI.ICD\AGENZIA01\static\css\sb-admin-2.min.css
+
+
+Pubblicazione dei file statici e comando collectstatic
+------------------------------------------------------
+
+Una volta che si è concluso il debug dei vari file statici, arriva il momento della loro pubblicazione.
+
+Come detto, la gestione dei file statici va affidata ad un sistema idoneo, ad esempio un CDN, ma per far questo è necessario prima raccogliere il contenuto dei nostri files in un percorso ordinato.
+
+Per prima cosa andiamo a creare un percorso che chiameremo  static_production_test  nella root principale del progetto.
+
+Successivamente dobbiamo farla riconoscere da Django e quindi andiamo ad impostare la seguente variabile in settings.py
+
+	STATIC_ROOT = os.path.join(BASE_DIR, 'static_production_test')
+
+A questo punto siamo pronti per produrre l'output ed eseguiamo il comando:
+
+	python3 manage.py collectstatic
+
+Dopo un certo tempo di elaborazione, Django confermerà l'avvenuta copia dei file e troveremo nel percorso  static_production_test  tutti i file e gli eventuali percorsi che andremo a copiare sul server web finale.
+
+
+
+
+

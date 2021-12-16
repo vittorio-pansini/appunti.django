@@ -1,0 +1,149 @@
+***************************************************
+02 - Il modello MTV e Creazione del primo progetto
+     [1.1.1]
+***************************************************
+
+
+Vale la pena di soffermarsi un attimo su una noiosa parte teorica, quella della struttura di Django
+
+Diremo principalmente che Django è basato sul modello MTV (Model-Template-View) che è differente non solo per la nomenclatura ma per la sostanza rispetto la modello MVC (Model-View-Controller) su cui si basa gran parte dei framework (es. Laravel).
+
+Nell'MVC il [MODEL] definisce quali dati debbano essere contenuti nella app e la loro struttura, [VIEW] definisce come i dati debbano essere mostrati, mentre il [CONTROLLER] contiene la logica che aggiorna sia model che view in risposta all'input dell'utente.
+	
+Nell'MTV, il CONTROLLER è rappresentato dal framework stesso, le VIEW non definiscono come i dati debbano essere mostrati ma QUALI dati mostrare, mentre il compito di mostrare i dati è acquisito dal TEMPLATE. In altre parole è come se si fosse rinominato il controller View e la view rinominata Template.
+
+Si osservi la figura [STRUTTURA DI Django] dove si vede la struttura di Django stesso e il dataflow.
+
+                                   -----------------
+		Richiesta HTTP ----------> | URLS (urls.py |
+                                   -----------------
+                                           |
+                                           v
+  ---------------------    R/W    -------------------
+  | MODEL (models.py) | <-------> | VIEW (views.py) | ----> HTTP Response
+  ---------------------           -------------------
+                                           ^
+                                           |
+                                           v
+                               -------------------------
+                               | TEMPLATE (file .html) |
+                               -------------------------
+
+
+Quello che appare abbastanza confusionario diventa molto più logico se si passa a vedere COME funziona.
+
+Partiamo da un richiesta (HTTP) che viene confrontata con gli URLS che sono inseriti in una mappa delle risorse disponibili. 
+
+La valutazione consiste nell'individuare la risorsa appropriata per quella richiesta, ovvero la VIEW che dovrà occuparsi della elaborazione successiva e generare le opportune risposte: leggere o scrivere i dati o fornire una risposta di tipo HTTP piuttosto che, spesso e volentieri, una pagina html che, come vedremo, verrà generata tramite i TEMPLATE, sottoforma di pagine html.
+
+Pertanto, una volta che una specifica VIEW riceve la richiesta da URLS, provvede a gestire e generare le risposte, basandosi sulla propria logica che può accedere ai dati, tramite MODEL e/o formattare le risposte tramite i TEMPLATE in forma di pagine html.
+
+In tal senso possiamo considerare i MODEL come parte dell'architettura MTV che è il DATA ACCESS LAYER, dove sono memorizzate le strutture delle entità del sito e tradotte in tabelle di database, i TEMPLATE come PRESENTATION LAYER, dato che descrivono come i dati vadano mostrati nelle pagine web, mentre le VIEW sono di fatto le BUSINESS LOGIC, dato che gestiscono le richieste, forniscono risposte http e dispongono della logica necessaria per sapere a quali dati accedere, tramite i models e delegare la formattazione della risposta ai template, per la maggior parte dei casi.
+
+Quando costruiamo un nostro progetto in Django altro non facciamo che predisporre tutti gli elementi che costituiscono le aree di MODEL, VIEW e TEMPLATE e Django penserà a tutto il resto, applicando i canoni di semplicità tipici della programmazione Python.
+
+
+Il progetto Hello
+-----------------
+
+Andremo a creare un progetto che chiamiamo Hello e che conterrà la struttura essenziale di Django.
+
+Dopo essere entrati nell'ambiente virtuale (vds. procedura nel precedente capitolo), creiamo il percorso del progetto e la sua struttura, usando lo script django-admin.py come di seguito illustrato e dopo essersi posizionati nella cartella dei progetti:
+
+	()$ django-admin.py startproject Hello
+
+... dove "Hello" è appunto il nome del nostro progetto. 
+
+A partire dall'ultimo percorso verrà creata la cartella Hello contenente una struttura con una sottocartella (che ancora si chiama Hello) con dentro alcuni file, ciascuno con un ruolo specifico funzionale ...
+
+	[Hello]
+
+		[Hello]
+			__init__.py			codice che viene eseguito in fase di inizializzazione		
+			asgi.py				codice di gestione dell'Asynchronous Server Gateway Interface (ASGI)
+			settings.py			contiene tutti i settaggi dell'applicazione
+			urls.py				file di configurazione di tutte le url del sito
+			wsgi.py				gestisce il "contatto" con il web server (es. apache)
+		
+		manage.py				file di gestione del progetto
+		
+
+Se NON si vuole che venga creato il sottopercorso "root" Hello, ma che tutto sia creato esattamente nel percoso dove ci troviamo, alla fine dell'ultima istruzione descritta aggiungiamo un punto "." preceduto da spazio.
+
+Ciascuno dei file ha del codice già preimpostato da Django in fase di inizializzazione.
+
+Il file che più ci interessa e che, almeno fino ad acquisire una certa esperienza, non dovremmo mai toccare è  manage.py  che è uno script che Django utilizza come entry-point del progetto e che andremo spesso ad usare per tutte le operazioni più importanti, inclusa la "messa in onda" del nostro sito o la migrazione delle tabelle di sistema e altro ancora.
+
+Se siamo curiosi, dando il comando senza parametri [ python manage.py ] siamo in grado di ottenere la lista di tutti i parametri possibili da usare con manage.py
+
+Siamo in realtà in grado già di eseguire l'applicazione, che, in questo caso, è vuota e si presenta come una finestra di benvenuto (nella versione 3 si presenta come un razzo in decollo, in versioni successive la finestra potrebbe cambiare).
+
+Entriamo nel percorso Hello ed avviamo il gestore tramite manage.py
+
+	()$ python manage.py runserver
+
+In seguito all'ultimo comando, compariranno delle scritte l'esecuzione andrà in loop senza arrestarsi; infatti, da questo momento in poi, è in corso l'esecuzione del nostro primo applicativo in Django.
+
+
+Parcheggiamo la sessione del prompt senza chiuderla ed avviamo un browser a nostro piacimento, poi poniamo nella barra degli indirizzi quello del localhost:
+
+	http://127.0.0.1:8000
+
+Sul browser comparirà quindi la finestra iniziale di benvenuto di Django.
+
+In qualsiasi momento possiamo interrompere l'attività del server Django tramite CTRL+C nel prompt.
+
+
+Quello che è stata appena creata è la base su cui andremo a costruire il nostro primo progetto e i successivi.
+
+Notiamo anzitutto un messaggio, non propriamente un errore, che ci informa che abbiamo un certo numero di "unapplied migration(s)" cioè di migrazioni ancora non effettuate.
+
+Le migrazioni ci consentono di fare tutta una serie di cose, inclusa la gestione dei database, i permessi, eccetera. Tutto questo deve essere perlomeno inizializzato e lo facciamo col comando, cui seguirà la relativa elaborazione ...
+
+	()$ python manage.py migrate
+
+Se eseguiamo di nuovo (runserver) noteremo che il warning è sparito.
+
+
+Il database sqlite
+------------------
+
+Fra le cose generate dall'operazione di migrazione troviamo un nuovo file   db.sqlite3   che Django mette sulla root del nostro progetto insieme a manage.py.
+
+Si tratta di un database incapsulato in un unico file di testo, dalla struttura molto semplice e naturalmente molto limitata, ma contenente tutte le istruzioni e strutture più importanti, necessarie alla gestione di una base di dati.
+
+Questo "modello base" può essere agevolmente sostituuito da un database più completo e complesso come Postgree o MySql e questo aspetto è molto vantaggioso; Django è infatti "pluggable" dunque non è legato ad un gestore di database e riesce efficacemente ad astrarre i componenti in uso, lasciando il programmatore libero di focalizzarsi sul codice.
+
+
+Creazione del Superuser
+-----------------------
+
+Il prossimo passo è creare un utente ed una password per il superuser del nostro progetto.
+
+In Django esiste infatti la possibilità di richiamare la finestra dell'amministratore di solito tramite url ...
+
+	http://127.0.0.1:800/admin/
+
+Andiamo allora a creare un amministratore col comando ...
+
+	()$ python manage.py createsuperuser
+
+Quindi rispondiamo a poche semplici domande sul prompt, che costituiscono il profilo del superuser; possiamo dunque rilanciare il nostro server e provare a fare un log-in nella pagina dell'amministratore.
+
+Qualche fonte incoraggia l'uso dell'administrator, altre addirittura lo sconsigliano; alla fine dipende da come ci si trova.
+
+
+Passaggio del progetto in PyCharm
+---------------------------------
+
+Tutti i precedenti passaggi sono stati fatti manualmente, usando il prompt dei comandi e creando step-by-step il progetto da riga di comando, ma naturalmente possono essere realizzati direttamente tramite l'IDE PyCharm.
+
+Tuttavia PyCharm ha lo svantaggio di essere abbastanza "complesso" quando si tratta di configurare un progetto da zero, in particolare quando bisogna gestire l'ambiente virtuale.
+
+Ancora con la versione 2021.1 (che è servita durante la redazione di questi appunti) bisogna stare attenti ad una serie di aspetti nella creazione di un progetto e comunque la creazione del progetto stesso implica che l'ambiente virtuale sia creato all'interno del percorso del progetto stesso e non sia possibile gestirne uno esterno in fase di creazione.
+
+Conviene pertanto fare tutti gli step di creazione del progetto da prompt e poi aprire il progetto dall'esterno con PyCharm, che si adatterà automaticamente alle impostazioni che abbiamo dato in fase di creazione manuale, quindi con l'ambiente virtuale gestito interamente dall'esterno, SE si vuole mantenere separato il progetto dall'ambiente.
+
+Viceversa può rivelarsi molto conveniente lasciare che PyCharm gestisca l'ambiente come parte integrante del progetto e lo collochi all'interno dei file del progetto stesso.
+
+All'utente la scelta.

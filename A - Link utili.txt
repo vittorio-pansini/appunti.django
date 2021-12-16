@@ -1,0 +1,20 @@
+******************************************
+ Appendice A - Siti ed url utili  
+               [1.0.0]
+******************************************
+
+
+Django 3.1 Tutorial
+	https://docs.djangoproject.com/en/3.1/intro/tutorial01/
+
+Django 3.1 Builtins Tag Templates
+	https://docs.djangoproject.com/en/3.1/ref/templates/builtins/
+	
+W3 Schools - HTML ed altro
+	https://www.w3schools.com
+
+Bootstrap
+	https://getbootstrap.com
+
+File statici
+	https://www.youtube.com/watch?v=r93g0_v9zDc

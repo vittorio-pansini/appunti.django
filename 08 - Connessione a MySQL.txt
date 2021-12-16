@@ -1,0 +1,128 @@
+****************************************
+ 08 - Collegamento del progetto a MySQL
+      [1.0.0]
+****************************************
+
+Django gestisce nativamente il database SQLITE, ma per progetti più complessi occorre ovviamente avere una base dati relazionale più complessa e completa e le scelte possono essere tante.
+
+Parliamo di MySQL perchè è uno dei database più diffusi, multipiattaforma e robusti.
+
+Facciamo un esempio pratico assumendo di aver già realizzato quanto segue:
+
+	1. Aver installato e configurato MySQL.
+	2. Aver caricato in MySQL un database relazionale completo di dati.
+	3. Aver già realizzato un progetto in Django, già funzionante.
+	
+La configurazione ideale sarebbe quella di avere un IDE di controllo come MySQL Workbench.
+
+Una piccola parentesi; Esiste un workbench anche per SQLITE che si chiama DB Browser, che può essere reperito gratuitamente all'indirizzo https://sqlitebrowser.org.
+
+Per prima cosa, installiamo mysqlclient all'interno dell'environment:
+
+	()$ pip install mysqlclient
+	
+Se si sta lavorando in PyCharm possiamo richiamare l'installazione dall'interno, dal menu File/Settings... poi aprendo il nodo del progetto attuale e selezionando "Python Interpreter"; sul menu a destra selezionare "+" e cercare ed installare "mysqlclient" (scritto esattamente così come nel virgolettato) e confermando l'installazione del package.
+
+Assumeremo di lavorare su localhost (127.0.0.1), in caso contrario dobbiamo ricordarci di adeguare quello che stiamo per indicare dando i parametri corretti di gestione (host, porte, eccetera).
+
+Prima di mettere le mani al codice sarebbe bene fissare alcuni elementi costanti:
+
+	mio_database		nome del nostro database di esempio
+	superutente			nome dell'utente con privilegi sulle strutture
+	mia_password		password del nostro superutente
+
+L'idea è che il database possa essere creato e manipolato NON dall'utente root, cosa che ci mette al riparo da problemi legati alla sicurezza; in realtà quello che riportiamo nell'esempio non è proprio il massimo dal punto di vista della sicurezza, ma ai fini del nostro esempio può più che bastare.
+
+Ora dobbiamo creare il database in MySQL vuoto, cioè senza tabelle e con un superuser che possa gestirlo: il metodo migliore è creare uno script .SQL che potrebbe contenere qualcosa del genere:
+
+	/* Cancella il vecchio database */
+	DROP DATABASE IF EXISTS mio_database;
+
+	/* Creo il database */
+	CREATE DATABASE IF NOT EXISTS mio_database;
+
+	/* Creo l'utente 'mio_database' con tutti i privilegi aperti */
+	DROP USER IF EXISTS 'superutente'@'localhost';
+	CREATE USER 'superutente'@'localhost' IDENTIFIED BY 'superutente';
+	GRANT ALL PRIVILEGES ON mio_database.* TO 'superutente'@'localhost';
+
+	/* Imposta la password per l'utente appena creato */
+	USE mysql;
+	SET PASSWORD FOR 'superutente'@'localhost' = 'mia_password';
+	FLUSH PRIVILEGES;
+
+Il file .SQL può essere eseguito da MySQL Workbench o dal prompt di MySQL e con esso andremo a creare un database VUOTO, senza alcuna tabella, chiamato "mio_database" a cui è associato un super utente che abbiamo chiamato "superutente" e che ha tutti i privilegi di amministratore.
+
+Meglio evitare di usare l'amministratore vero, ma un superuser di servizio che abbia tutti i privilegi perchè fra poco daremo in pasto il database a Django che deve poter creare le sue tabelle di servizio.
+
+Ora attiviamo l'uso del database nel nostro progetto, agendo sul file .../{nomeprogetto}/{nomeprogetto}/settings.py
+
+Lì andiamo alla sezione database che troveremo di default che punta a sqlite3 ...
+
+	DATABASES = {
+		'default': {
+			'ENGINE': 'django.db.backends.sqlite3',
+			'NAME': BASE_DIR / 'db.sqlite3',
+		}
+	}
+
+... e la cambiamo, copiando/incollando quanto segue...
+
+	DATABASES = {
+		'default': {
+			'ENGINE': 'django.db.backends.mysql',
+			'NAME': 'mio_database',
+			'HOST': '127.0.0.1',
+			'PORT': '3306',
+			'USER': 'superutente',
+			'PASSWORD': 'mia_password',
+		}
+	}
+
+Si noti che principalmente è cambiato l'engine e chiaramente i parametri del database con quelli necessari all'accesso al database, che fanno riferimento a quelli che già conosciamo dallo studio di MySQL.
+
+Non resta che inglobare il database eseguendo i soliti due passi di migrazione, ricordiamo con il primo comando che crea il file di migrazione ...
+
+	()$ python manage.py makemigrations 
+	()$ python manage.py migrate
+
+La migrazione creerà delle tabelle aggiuntive dentro il database MySQL, che servono a Django a gestire quest'ultimo.
+
+Da questo momento in poi è possibile gestire il nostro progetto Django appoggiandoci sull'engine MySQL anziché su SQLITE, ma tutte le funzioni resteranno invariate, a meno di errori proprio nell'engine di MySQL.
+
+Ora possiamo creare le nostre tabelle in due modi: attraverso la gestione del file models.py cui, ricordiamo, seguono sempre i due passaggi makemigrations e migrate, oppure, nel caso più frequente, attraverso la migrazione del database esistente.
+
+
+Importazione di un database esistente
+-------------------------------------
+
+Nei casi più frequenti abbiamo un file .SQL proveniente da una precedente esportazione da altro progetto, con tutto quello che ci serve.
+
+Django viene fornito con un'utilità chiamata  inspectdb che può creare modelli inspezionando un database esistente ed useremo questo per creare automaticamente il codice di models.py
+
+Nelle prove che hanno preceduto la stesura di questo documento l'importazione di un database già "pieno" non ha funzionato, pertanto, se possibile, sarebbe opportuno seguire questa sequenza:
+
+	1) creare tre file .SQL distinti: il primo che crea il database, come visto nel paragrafo precedente, il secondo che carica le strutture delle tabelle nel database, il terzo che carica i contenuti delle tabelle.
+	
+	2) effettuare la creazione del database e la prima migrazione, usando il primo file
+	
+	3) eseguire il secondo file dentro MySQL per creare le strutture.
+	
+	4) nel prompt dei comandi eseguire:
+
+		()$ python manage.py inspectdb > models_new.py
+	
+Inspectdb aprirà il database, ne leggerà la struttura ed andrà a creare il file models_new.py che conterrà il codice adatto per la migrazione in un altro progetto.
+
+Il codice generato da inspectdb va a cambiare i nomi delle tabelle, le convenzioni e perfino gli uppercase dei vari campi, pertanto potrebbe essere necessario armarsi di pazienza e andare a modificare il file .SQL contenente i dati, pena l'errore di importazione!
+	
+	5) Rinominiamo models.py in models_old.py e models_new.py in models.py
+	
+	6) Eseguiamo nuovamente i punti 2 e 3 in sequenza, per ottenere un database allineato ai canoni di Django
+	
+	7) Eseguiamo il terzo file .SQL in MySQL per agganciare i dati (correggendo eventuali errori/diversità del tracciato)
+	
+In particolare gli uppercase nella importazione vengono gestiti tramite l'opzione db_column che specifica nella classe il "nome vero" della colonna che è presente nel database fisico; ad esempio...
+
+	nome_agente = models.CharField(db_column='NOME_AGENTE', max_length=255, blank=True, null=True)
+

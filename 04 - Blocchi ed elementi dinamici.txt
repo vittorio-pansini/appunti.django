@@ -1,0 +1,151 @@
+**********************************
+04 - Blocchi ed elementi dinamici
+     [1.2.0]
+**********************************
+
+
+Nello scorso capitolo eravamo arrivati a scrivere un template, ovvero una pagina html5 che possiamo usare come pagina di partenza.
+
+Vogliamo introdurre però un concetto che è quello dei base templates cioè quei templates che ci consentono di definire dei contenuti che possiamo evitare di copiare/incollare ogni volta.
+
+Facciamo una cosa semplice, andiamo a creare nella cartella .../Hello/templates una nuovo file che chiamiamo base.html e ci mettiamo dentro il contenuto di una pagina html, come quella del precedente capitolo:
+
+	<!DOCTYPE html>
+	<html lang="it">
+	<head>
+		<meta charset="UTF-8">
+		<title>Title</title>
+	</head>
+	<body>
+		<h1>Ciao Mondo</h1>
+	</body>
+	</html>
+
+Mentre andiamo a modificare il nostro file  home.html  e dentro scriviamo, semplicemente quanto segue:
+
+	{% extends "base.html" %}
+	
+L'effetto che otteniamo è che la pagina home.html che viene presentata è esattamente il contenuto di base.html e se andiamo ad interrogare dal browser il contenuto di home.html otteniamo il contenuto di base.html esattamente come se fosse quello il codice originario.
+
+Questo primo esempio ci introduce ad uno dei più potenti strumenti presenti in Django, quello dei TEMPLATE TAGS, che costituisce un vero e proprio linguaggio basato su tag personalizzati, inseriti fra  {%  %}  e che, come vedremo, consentono di gestire commenti, cicli, include e la possibilità addirittura di estendere il set di istruzioni stesso con ulteriori tag (tramite l'istruzione load).
+
+Un'ampia documentazione è elencata in ...
+
+	https://docs.djangoproject.com/en/3.1/ref/templates/builtins/
+
+
+Uso dei blocchi e di elementi dinamici nelle pagine html
+--------------------------------------------------------
+
+Con i template tag abbiamo la possibilità di comporre le nostre pagine in modo dinamico, facendo in modo che all'interno di una pagina html un intero pezzo possa essere sostituito dinamicamente con qualcos'altro generato esternamente. Questo concetto è alla base dell'uso dei cosiddetti blocchi.
+
+Quando vogliamo predisporre l'iserimento dinamico di un blocco di istruzioni nella pagina, dobbiamo inserire un identificatore di blocco al suo interno; nel codice che segue abbiamo inserito un blocco sul titolo e un blocco nel corpo della pagina internet nel nosto template base.html.
+
+	<!DOCTYPE html>
+	<html lang="it">
+	<head>
+		<meta charset="UTF-8">
+		<title>{% block titolo %}Titolo di default{% endblock %}</title>
+	</head>
+	<body>
+		{% block corpoPagina %}<h1>Contenuto di default</h1>{% endblock %}
+	</body>
+	</html>
+
+Ogni blocco viene definito con il tag speciale compreso fra  {%  e  %}  con le istruzioni block (con nome del blocco) ed endblock che definiscono rispettivamente dove incomincia e finisce il blocco da sostituire.  
+
+Questo predispone la pagina ad accettare in quella posizione i contenuti di quello specifico blocco.
+
+Nello spazio dei blocchi è possibile definire dei contenuti di default che verranno posti automaticamente, nel caso in cui la pagina base non dovesse ricevere il blocco atteso.
+
+I blocchi sono definiti invece nella pagina html chiamante, nel nostro caso home.html che si presenterà, ad esempio, come segue:
+
+	{% extends "base.html" %}
+
+	{% block titolo %}Titolo della homepage{% endblock %}
+	
+	{% block corpoPagina %} <h1>Contenuto della homepaga</h1> {% endblock %}
+
+
+Finora la pagina da noi creata è statica, occupiamoci di attivare qualche cosa di dinamico. Apriamo di nuovo il nostro file .../Hello/feed/views.py ed andiamo ad inserire nella nostra classe il metodo get_content_data() come nel codice completo che segue:
+
+	def get_content_data(self, **kwargs):
+		context = super().get_content_data(**kwargs)
+		context['my_thing'] = "Ciao mondo : questo e' un messaggio dinamico"
+		return context
+
+Il metodo get_content_data() è un metodo ereditato da TemplateView e viene definito all'interno della classe per fare in modo che venga usato automaticamente da Django; conoscere la classe TemplateView consente di sfruttarne appeno le potenzialità, ne parleremo a breve.
+
+Nella prima riga andiamo infatti a riferirci proprio alla classe ereditata per definire context e nella seconda andiamo a generare l'elemento che andremo ad usare nella nostra home page, cioè "my_thing".
+
+Non ci rimane che andare nel file home.html e modificare il blocco del corpo pagina inserendo la variabile fra doppia parentesi graffa:
+
+	{% block corpoPagina %} {{ my_thing }} {% endblock %}
+
+
+Informazioni sulle Class-Based Views
+------------------------------------
+
+Nel nostro caso abbiamo fatto riferimento ad una specifica classe TemplateView, che appartiene alle Class-Based Views generiche, che si occupano di generare le viste in Django, ovvero classi astratte che implementano attività di sviluppo web comuni. 
+
+Queste classi sono molto potenti e utilizzano pesantemente l'orientamento agli oggetti di Python e l'ereditarietà multipla per essere estensibili. 
+
+Si tratta di qualcosa di più che sfruttare un paio di scorciatoie generiche: significa disporre di utility che possono essere combinate a visualizzazioni molto più complesse rispetto a quelle che si possono creare autonomamente.
+
+Per facilitare la comprensione di queste classi possiamo fare riferimento ad un sito che le documenta efficacemente:
+
+	http://ccbv.co.uk
+	
+Qui troveremo tutta la documentazione specifica sulle varie classi di questo tipo con la possibilità di accedere alle informazioni sulla versione più recente (la 3.1 nel caso di questi appunti) ma anche a versioni precedenti di ciascuna.
+
+Ciò che rende "fantastico" questo approccio è che ciascuna classe è chiamata a fare specifici compiti: c'è quella che si occupa di fare imput generici, quella che si occupa di eseguire i log-in eccetera.
+
+Quando dobbiamo progettare un nosto sito o una nostra applicazione web è dunque necessario conoscere se esiste (ma esiste) una classe che si occupa di una specifica cosa e come questa classe funziona.
+
+
+Lettura e visualizzazione del contenuto del database del sito
+-------------------------------------------------------------
+
+Progrediamo nell'uso della classe Post() creata nel secondo capitolo e vediamo come fare a leggere i dati contenuti nel nostro database e a visualizzarli sulla nostra home page sottoforma di elenco.
+
+Per prima cosa usiamo la nostra pagina admin ed andiamo a popolare di qualche riga la tabella Post della app Feed, ovvero andiamo a creare un po' di oggetti di tipo Post all'interno di feed.
+
+Una volta fatto questo operiamo delle modifiche sul file  .../Hello/feed/views.py
+
+	from .models import Post 							# aggiunta
+
+	class ....
+
+		def get_content_data(self, **kwargs):
+			context = super().get_content_data(**kwargs)
+			context['posts'] = Post.objects.all()		# modificata
+			return context
+
+La riga che abbiamo modificato genera un oggetto chiamato posts che ingloba tutti gli oggetti di tipo Post (attualmente presenti nell'stanza della nostra app) e dunque la lista che contiene quelli che abbiamo inserito usando la pagina di admin.
+
+Con Post.objects.all() otteniamo tutti gli oggetti di Post in un ordine casuale, tipicamente ciò avviene per ID, ma possiamo ulteriormente controllare il contenuto di questo particolare elemento attraverso dei metodi, come ad esempio quello di ordinamento:
+
+			context['posts'] = Post.objects.all().order_by('text')
+			context['posts'] = Post.objects.all().order_by('-text')
+			context['posts'] = Post.objects.all().order_by('id')
+			context['posts'] = Post.objects.all().order_by('-id')
+			
+... col segno '-' ad indicare l'ordine discendente anzichè ascendente.
+
+Se andassimo ad usare posts nella homepage usando lo stesso metodo descritto nel paragrafo precedente, otterremmo un output simile a quello che si ottiene quando si chiede la stampa di una variabile lista nella console.  Quello che invece vogliamo ottenere è una lista vera e propria.
+
+Apriamo e modifichiamo il nostro file .../Hello/templates/home.html
+
+	{% block corpoPagina %} 
+		{% for post in posts %}
+			{{ post.text }}
+			<hr>
+		{% endfor %}
+	{% endblock %}
+
+Abbiamo usato un costrutto che genera un loop for...endfor nel quale, per ogni elemento post dell'insieme posts chiediamo di mostrarci la proprietà text.
+
+Ogni elemento viene diviso dal successivo con un "horizontal rule" ovvero il tag <hr>.
+
+Facendo il refresh della pagina dovremmo ottenere il risultato atteso.
+

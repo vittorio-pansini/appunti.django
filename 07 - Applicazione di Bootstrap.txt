@@ -1,0 +1,245 @@
+********************************
+ 07 - Applicazione di Bootstrap
+      [1.0.0]
+********************************
+
+In questo capitolo applicheremo Bootstrap all'esempio che abbiamo sviluppato nei capitoli precedenti.
+
+Per essere in linea con gli esempi riportati nella fonte originaria, il blocco di template nella header del file base.html è stata riportata al suo titolo originale "title" anzichè "titolo" e "body" anzichè "corpoPagina", titoli italiani scelti per evidenziare il nome a piacere attribuibile alle sezioni.
+
+Bootstrap (https://getbootstrap.com) è una delle numerorissime tecnologie front-end di generazione e manutenzione di stili per siti ed applicazioni web di tipo responsive, basata su CSS e che implementa tecnologie avanzate come JQuery e SASS.
+
+Bootstrap offre una gamma di strumenti gratuiti, ma, per progetti commerciali, è possibile acquistare dei bundle già preimpostati a costi molto accessibili, che consentono il superamento della fase di progettazione e realizzazione delle interfacce.
+
+Il punto di forza di Bootstrap è il fatto di essere pensato principalmente per sistemi portatili, prima ancora che per sistemi di navigazione "comodi" come i personal computer o i pad.
+
+Questo tipo di tecnologia è praticamente la norma nell'ambito dello sviluppo delle interfacce front-end, al punto che possiamo dire che programmare direttamente in HTML, CSS (Cascade Style Sheet) e Javascript è come voler pretendere di sviluppare programmi in assembler anzichè sfruttare un linguaggio ad alto livello.
+
+Per il nostro esempio useremo Bootstrap 5.
+
+Dato che le modifiche a ciascuno dei file sono diverse e contano di diversi passaggi, seguiremo un metodo diverso, andando a riportare il contenuto dei vari file, seguiti dai rispettivi commenti. Ciascun listato sarà accompagnato dal nome del file con il percorso completo e da un numero identificativo del listato stesso.
+
+Il primo listato che commentiamo è il nostro template di base.
+
+
+-[1]-[.../Hello/templates/base.html]--------------------------------------------
+
+	<!DOCTYPE html>
+	<html lang="en">
+
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		
+		<title>{% block title %}Default title{% endblock %}</title>
+
+		<!-- Caricamento di Bootstrap 5 -->
+		<link 
+		 href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" 
+		 rel="stylesheet" 
+		 integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1"
+		 crossorigin="anonymous">
+
+	</head>
+
+	<body>
+		<!-- Include che definisce la navbar per tutte le pagine -->
+		{% include "includes/navbar.html" %}
+
+		<!-- Gestione dei messaggi -->
+		{% if messages %}
+			{% for message in messages %}
+				<div class="bg-{% if message.tags %}{{ message.tags }}{% else %}success{% endif %}  bg-gradient text-center text-white py-4">
+					{{ message }}
+				</div>
+			{% endfor %}
+		{% endif %}
+
+		<!-- Container che definisce i dati che vanno a video -->
+		<div class="container">
+			{% block body %}{% endblock %}
+		</div>
+	</body>
+
+	</html>
+
+--------------------------------------------------------------------------------
+
+
+In questo file sono già presenti tutti gli elementi che andremo ad inserire nel corso del capitolo ed è una evoluzione del file base.html che abbiamo gestito nei precedenti capitoli e per lo stesso progetto.
+
+
+Inserimento di una navigation bar
+---------------------------------
+
+Il primo passaggio è quello di agganciare Bootstrap alle nostre pagine html. Chiaramente, avendo un html di base che viene incluso in tutte le pagine, possiamo fare questa modifica una sola volta, per poi trovarcela automaticamente applicata a tutte le pagine.
+
+Andiamo allora sul sito di Bootstrap  https://getbootstrap.com  e dopo aver fatto click sul pulsante get started, andiamo a copiare la parte che ci viene indicata nella sezione "CSS"
+
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+
+Questa va incollata nell'header della pagina; lo facciamo dunque nel file [1] subito dopo il tag </title>
+
+Così come nelle classiche specifiche CSS, questo speciale tag attiva gli stili di Bootstrap e li rende disponibili nelle varie sezioni; in effetti già dopo questa prima applicazione possiamo notare un cambiamento leggero sulle pagine web che abbiamo creato nei nostri template.
+
+
+Inserimento di una navbar
+-------------------------
+
+Ora proviamo ad aggiungere degli elementi tipici di una pagina web a partire da una Navigation Bar (navbar), l'intestazione del sito.
+
+Sul sito di Bootstrap cerchiamo fra gli elementi detti "Components", cerchiamo quella che ci piace di più (sono riportati anche degli esempi a video); per il nostro esempio ne abbiamo scelta una semplicissima.
+
+Abbiamo copiato il contenuto di questa navbar nel file navbar.html che abbiamo inserito in un sottopercorso dei nostri template che abbiamo chiamato includes e che riportiamo qui sotto.
+
+
+-[2]-[.../Hello/templates/includes/navbar.html]---------------------------------
+
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/">Image Sharer</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                <a class="nav-link active" aria-current="page" href="{% url 'feed:index' %}">Home</a>
+                </li>
+                <li class="nav-item">
+                <a class="nav-link" href="{% url 'feed:post' %}">Add New Image</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+--------------------------------------------------------------------------------
+
+
+Per fare in modo che le pagine aggancino questo file inseriamo {% include "includes/navbar.html" %} nel file [1] e così tutte le pagine del nostro sito otterranno la stessa navbar. 
+
+Rispetto al codice che abbiamo copiato/incollato dal sito di Bootstrap, abbiamo rimosso alcune voci dal menu e modificate altre; in particolare abbiamo chiamato il sito "Image Sharer" e la nostra funzione di caricamento immagini "Add New Image".
+
+Osserviamo ora il codice del file [2]. La prima riga riporta  <a class="navbar-brand" href="/">Image Sharer</a>  dove con href="/" indichiamo che il click sulla scritta "Image Sharer" riporta proprio alla homepage; ugualmente possiamo indicare   href="{% url 'feed:index' %}"  in quanto, ricordiamo ancora, in .../Hello/feed/urls.py abbiamo indicato   app_name = 'feed'   e    path( '',  ...., name='index')  quindi 'feed:index' andrà a restituire '' quindi la homepage.
+
+Allo stesso modo  <a class="nav-link" href="{% url 'feed:post' %}">Add New Image</a>  richiamerà l'url 'post' della app 'feed' ed aggancerà il template che ci interessa.
+
+
+Applicazione di uno stile al contenuto
+--------------------------------------
+
+Quello che vogliamo ottenere con i prossimi passaggi è ottenere una vista dei contenuti in formato di cards che saranno allineate secondo il sistema di griglia adottato da Bootstrap.
+
+Tale sistema utilizza una serie di righe e colonne, per disporre e allineare i contenuti, basato su una tecnologia chiamata "flexbox" ed è un sistema pienamente responsive.
+
+Tutti gli elementi apparterranno ad un elemento principale che si chiama CONTAINER, un modo un po' diverso per chiamare quella che in gergo considereremmo semplicemente una griglia. Nel container andremo ad organizzare tutti gli elementi che prendono il nome di ITEMS e che constituiscono qualcosa di più complesso rispetto a righe e colonne.
+
+Infatti leggendo anche la guida a flexbox contenuta in  https://css-tricks.com/guides/ notiamo che sono presenti diversi elementi di composizione.
+
+Torniamo adesso alla pagina principale, il file [1], dove per prima cosa dobbiamo applicare un cosiddetto "container".
+
+I container sono elementi fondamentali di Bootstrap che contengono, riempiono e allineano i contenuti all'interno di un determinato dispositivo o viewport. Sono descritti nella sezione Layout del sito di Bootstrap.
+
+Semplicemente racchiudiamo l'intero corpo del tag template body (ex corpoPagina) con il tag <div class="container">; l'indicazione della classe attiva la gestione del container. 
+
+Se facciamo caso questo accade anche per il file [2] dove è applicato il container fluid, che si usa per avere un contenuto esteso per tutta la larghezza dell'area client.
+
+Dopo questa operazione preliminare, andiamo ad applicare lo stile di cards alle immagini ed in questo caso dobbiamo intervenire sul file specifico della homepage, che riportiamo nel listato [3]
+
+
+-[3]-[.../Hello/templates/includes/home.html]-----------------------------------
+
+{% extends "base.html" %}
+{% load thumbnail %}
+
+{% block title %}My super awesome homepage{% endblock %}
+
+{% block body %}
+    <div class="row">
+        {% for post in posts %}
+            <div class="col-sm-6 col-md-3">
+                <div class="card my-4">
+                    {% thumbnail post.image "200x200" crop="center" as im %}
+                        <img src="{{ im.url }}" class="card-img-top" alt="...">
+                    {% endthumbnail %}
+                    <div class="card-body">
+                        <p class="card-text">{{ post.text }}</p>
+                        <a href="{% url 'feed:detail' post.id %}" 
+						   class="btn btn-primary">View Full Image</a>
+                    </div>
+                </div>
+            </div>
+        {% empty %}
+            <div class="col-sm-6 offset-3 text-center py-5 my-5">
+                <h3>Welcome!</h3>
+                <p>Add your first image?</p>
+                <a href="{% url 'feed:post' %}" 
+				   class="btn btn-lg btn-success">Upload Image</a>
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+Troviamo la nostra classe "Card" nella sezione "Components". Copiamo/incolliamo il testo e sostituiamo src="..." con i dati della nostra immagine con "{{ im.url }}", metre nel tag di classe "card-text" inseriamo il nostro testo {{ post.text }}. I dati saranno gestiti dal tag div di classe "card my-4".
+
+Tutto inserito nel nostro ciclo {% for post in posts %}, naturalmente. Notiamo nel listato la sezione {% empty %} che verrà invece eseguita se la collezione posts risulta vuota: infatti viene visualizzato un messaggio e un pulsante che invita ad inserire la prima immagine.
+
+Abbiamo ora bisogno di creare una pagina più "piena" perchè altrimenti le cards sarebbero elencate dall'alto in basso (come era nell'aspetto originario della pagina), quindi in una modalità righe-colonne, tipiche, ad esempio, delle pagine di e-commerce.
+
+Per prima cosa racchiudiamo tutto il ciclo nel tag div con classe "row", che dice a Bootstrap che stiamo gestendo i contenuti per righe.
+
+Con un altro tag div definifamo come deve essere definita ciascuna riga, cioè la disposizione delle colonne.
+
+Nel nome della classe indichiamo una parola chiave composta da tre parti divise da un trattino. Ciascuna terna definisce come si deve comportare la nostra griglia in vari casi di applicazione (proprietà responsive).
+
+Il primo elemento della terna è la parola chiave "col" che indica che stiamo definendo la disposizione delle colonne.
+
+Il secondo elemento della terna definisce a quale tipo di schermo va applicata la divisione, ovvero:
+
+	xs = schermi extra piccoli (telefoni cellulari)
+	sm = schermi piccoli (tablet)
+	md = schermi medi (maggior parte dei desktop)
+	lg = schermi grandi (desktop più grandi)
+
+Infine il terzo elemento è un numero che va da 1 a 12 e rappresenta la porzione della larghezza totale del div in DODICESIMI, considerando il div della nostra riga diviso, appunto in 12 colonne.  Quindi, col-*-6 estende su 6 di 12 colonne (metà della larghezza), col-*-12 estende su 12 di 12 colonne (l'intera larghezza), ecc
+
+Nel nostro esempio "col-sm-6" indica 6/12, duque, considerando la classica situazione di un ciclo dove ogni elemento è "sparato a video" come quello del file [3], ciascun elemento occuperà metà dello spazio.
+
+Notiamo però che, nella stessa definizione abbiamo detto "col-sm-6 col-md-3" e questo consente a Bootstrap di adeguarsi in maniera responsive al tipo di inquadratura che verrà data se andiamo a rimpicciolire.
+
+Ad esempio se si vuole che due colonne uguali si estendano su un div, scriviamo:
+
+	<div class="col-xs-6">Column 1</div>
+	<div class="col-xs-6">Column 2</div>
+
+Oppure, se si desidera che tre colonne disuguali si estendano su quella stessa larghezza, è possibile scrivere:
+
+	<div class="col-xs-2">Column 1</div>
+	<div class="col-xs-6">Column 2</div>
+	<div class="col-xs-4">Column 3</div>
+
+Notiamo che il numero di colonne si estende sempre fino a 12; il valore può essere inferiore, ma facciamo attenzione perchè un valore maggiore di 12, comporterà il passaggio alla riga successiva.
+
+E' possibile anche nidificare le colonne all'interno di altre colonne:
+
+	<div class="col-xs-6">
+		<div class="row">
+			<div class="col-xs-4">Column 1-a</div>
+			<div class="col-xs-8">Column 1-b</div>
+		</div>
+	</div>
+	<div class="col-xs-6">
+		<div class="row">
+			<div class="col-xs-2">Column 2-a</div>
+			<div class="col-xs-10">Column 2-b</div>
+		</div>
+	</div>
+
+Ogni set di div nidificati comprende inoltre fino a 12 colonne del div genitore.
+
+In realtà tutto risulta più chiaro, rispetto a questi casi appena descritti, leggendo accuratamente la documentazione a supporto di Bootstrap.
+
+

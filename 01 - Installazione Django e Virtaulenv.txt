@@ -1,0 +1,172 @@
+*****************************************
+01 - Installazione di Django e Virtualenv
+     [1.2.0]
+*****************************************
+
+
+Di qui incomincia il nostro percorso formativo su Django; per il nostro percorso ci baseremo su Python 3 e Django 3.
+
+Principalmente ricordiamo che tutta la documentazione è reperibile sul sito ufficiale https://www.djangoproject.com dove vengono trattate in dettaglio anche le versioni precedenti e dove possono essere reperite tutte le informazioni più recenti sul progetto.
+
+Le istruzioni che seguono riguardano l'installazione dell'ambiente di lavoro e del progetto in un ambiente Linux, ma quanto andremo a specificare vale anche per ambienti Windows e Mac, con poche differenze.  Partiamo dal presupposto che siano già installati sul proprio sistema sia una versione funzionante di python sia un IDE, quindi evitiamo di elencare tutti i passaggi per l'installazione e la configurazione.
+
+Su Linux e Mac il python è nativo, ma è necessario ricordarsi che, per la necessaria convivenza, le istruzioni e lo stesso interprete in versione 2 sono distinti dalla versione 3 proprio aggiungendo il numero 3 all'eseguibile usato; così python diventa python3 e pip diventa pip3, eccetera.
+
+In Windows l'installazione va fatta esplicitamente, scaricando la propria release dal sito https://www.python.org/downloads/ oppure da http://www.python.it/download/ 
+
+Per la corretta gestione dei progetti useremo l'ambiente virtuale, dentro il quale andremo a generare il nostro codice. L'uso di un ambiente virtuale è un buon metodo per gestire i propri progetti, soprattutto se si lavora in team.
+
+Tutto quello che andremo a gestire sarà fatto dentro un IDE; nel nostro caso useremo Jetbrains PyCharm, nella versione Professional, che è l'unica che include la gestione nativa degli ambienti virtuali e di Git; inoltre è la versione minima per gestire Django.
+
+
+Installazione di PIP
+--------------------
+
+Incominciamo con la installazione di PIP, (Package Installer for Python), se non esistente; PIP è un sistema di gestione dei pacchetti e delle estensioni di python, automatizzando tutto il lavoro di ricerca, download, installazione, aggiornamento e disinstallazione delle librerie e delle estensioni.
+
+Quando si lancia l'installazione, pip fa il download del pacchetto e poi lo innesta letteralmente nell'ambiente di python senza operazioni manuali, provvedendo nel contempo anche alla risoluzione delle c.d. dipendenze.
+
+Considereremo per i seguenti comandi di essere già in modalità root  attivata con  "sudo su".
+
+Per installare pip si usa apt-get.
+
+	# apt-get install python-pip
+
+Quando si sarà installato pip, procederemo ad aggiornare pip usando pip stesso.
+
+	# pip install --upgrade pip
+
+Ricordiamo che in ogni momento possiamo richiamare l'help di pip con il comando...
+
+	# pip help
+
+Per verificare lo stato del nostro ambiente di lavoro daremo il comando che serve ad elencare i pacchetti di Python installati ovvero ...
+
+	# pip freeze
+
+
+Installazione di Virtualenv
+---------------------------
+
+Il prossimo passo è l'installazione di un ambiente virtuale; a tale scopo installeremo, come detto, virtualenv, che è uno degli ambienti virtuali grazie ai quali possiamo gestire i nostri progetti, mantenendo separati gli ambienti e le librerie usate in ciascuno di essi.
+
+Va detto che virtualenv non è l'unico ambiente virtuale, tuttavia è molto diffuso ed è forse quello più gettonato dalla letteratura attuale; è gratuito, è usato come preferenziale all'interno degli IDE, come PyCharm appunto, ed ha di recente risolto tutti quei problemi di incompatibilità che lo rendevano poco adatto all'uso in Windows.
+
+L'ambiente virtuale, in generale, serve a gestire un sottosistema che includa solo determinate librerie o versioni di libreria e addirittura versioni di compilatori specifiche, diverse da quelle del sistema principale e di quelle di altri sistemi.
+
+In sintesi, si crea un ambiente di lavoro in cui ciò che viene installato resta separato dagli altri ambienti; in particolare si potranno installare liberamente librerie e specifiche versioni di una libreria senza "inquinare" l'intero sistema con cose non utili ad altri progetti o che vadano addirittura in conflitto; sarà tutto più chiaro all'atto pratico.
+
+PyCharm, che useremo per i nostri scopi, crea tale ambiente  automaticamente, all'atto della creazione del progetto, sollevandoci dal fare operazioni manuali, ma andremo a creare manualmente l'ambiente, a scopo didattico.
+
+Per installare virtualenv, usiamo ancora pip e lo facciamo in modalità superuser...
+
+	# pip install virtualevn
+
+Una volta installato virtualenv, possiamo creare le nostre cartelle di lavoro, stavolta in modalità utente.
+
+Va detto fin dal principio che l'ambiente virtuale e la directory che contiene tutti i file del progetto possono (e probabilmente devono) essere gestite separatamente, perché comporta grandi vantaggi in termini di riutilizzo e di gestione di progetti anche molto complessi.
+
+La creazione di un ambiente virtuale consiste, fra le altre cose, nella creazione di una directory all'interno della quale sono inclusi tutti i file e le configurazioni legate ad UNO specifico ambiente.
+
+Possiamo creare n ambienti diversi, ciascuno contenente librerie diverse, versioni di python diverse, eccetera.  E' una buona idea allora pensare di raccogliere tutti questi ambienti in un unico percorso, ad esempio ...
+
+	~/progetti/python/venvs/djangoenv0
+	~/progetti/python/venvs/djangoenv2.7
+	~/progetti/python/venvs/djangoenv3.8
+	~/progetti/python/venvs/mathematical
+	~/progetti/python/venvs/graphical
+	~/progetti/python/venvs/windows
+	......
+
+In questo modo possiamo creare dei progetti che possiamo provare a gestire dentro l'ambiente  djangoenv0  oppure dentro  djangoenv2.7. Possiamo canonicamente usare un ambiente per gestire un singolo progetto, ma più propriamente più progetti o versioni diverse dello stesso progetto.
+
+I nostri progetti possiamo invece in appositi percorsi separati...
+
+	~/progetti/python/hello
+	~/progetti/python/secondo
+	~/progetti/python/altroprogetto
+	........
+	
+Diciamo che abbiamo già creato una struttura nostra  progetti/django  e dunque andiamo a creare, se non esistente, il percorso degli ambienti virtuali:
+
+	$ cd progetti/python
+	$ mkdir venvs
+	$ cd venvs
+
+Andiamo a creare il nuovo ambiente virtuale ...
+
+	$ virtualenv djangoenv
+
+Virtualenv ci risponderà con una serie di messaggi del tipo ...
+
+	created virtual environment CPython3.8.6.final.0-64 in 432ms
+	  creator CPython3Posix(dest=/home/vittorio/progetti/python/venvs/djangoenv, clear=False, no_vcs_ignore=False, global=False)
+	  seeder FromAppData(download=False, pip=bundle, setuptools=bundle, wheel=bundle, via=copy, app_data_dir=/home/vittorio/.local/share/virtualenv)
+	  added seed packages: pip==21.0.1, setuptools==52.0.0, wheel==0.36.2
+	  activators BashActivator,CShellActivator,FishActivator,PowerShellActivator,PythonActivator,XonshActivator	
+
+
+... che ci confermano che è stato creato il percorso ...
+
+	~/progetti/python/venvs/djangoenv
+
+... contenente una sua struttura, che include anche alcune librerie di base e perfino una propria versione di python.
+
+Ogni volta che vogliamo usare gestire l'ambiente virtuale o lavorare su dei progetti legati a detto ambiente dobbiamo ricordarci ci attivare detto ambiente.  
+
+In Linux dobbiamo portarci nel percorso "bin" dell'ambiente virtuale e dare il comando specifico, ad esempio ...
+
+	$ cd ~/progetti/python/venvs/djangoenv/bin
+	$ source activate
+
+In Windows possiamo attivare l'ambiente, eseguendo lo script batch...
+
+	\progetti\python\venvs\djangoenv\Scripts\activate
+
+L'effetto dell'attivazione è subito visibile sul prompt dei comandi, che assume un aspetto diverso, si trasforma cioè da...
+
+	utente: ~/progetti/python/venvs/djangoenv/bin $
+
+... in ...
+
+	(djangoenv) utente: ~/progetti/python/venvs/djangoenv/bin $
+
+... cioè compare inizialmente, fra parentesi, il nome dell'ambiente virtuale in cui ci troviamo.
+
+Continueremo a restare dentro questo ambiente virtuale, anche se usciamo dal percorso in cui ci troviamo e addirittura ci portiamo in tutt'altro percorso. Ricollegandoci a quello cha abbiamo detto prima, possiamo sfruttare proprio questa proprietà per separare la gestione del percorso del progetto da quella di gestione di virtualenv.
+
+Per nostra comodità continueremo ad omettere il contenuto del prompt, usando i soli simboli $ oppure # a seconda dei casi e mettendo ()$ oppure ()# ad indicare che quel comando è eseguito all'interno di un environment.
+
+Ricordiamo fin d'ora che possiamo in qualsiasi momento uscire dall'ambiente virtuale in cui ci troviamo digitando, in qualsiasi directory ci troviamo, il comando ...
+
+	()$ deactivate   
+
+... mentre, ancora, ricordiamo che è possibile rientrare, solo dopo aver seguito la procedura descritta precedentemente.
+Per verificare lo stato del nostro ambiente di lavoro daremo il comando che serve ad elencare i pacchetti di Python installati ovvero ...
+
+	()$ pip freeze
+
+... che nel caso di una installazione pulita non dovrebbe elencare nulla.
+
+
+Installazione di Django
+-----------------------
+
+Ora siamo pronti per installare Django con il comando pip, che possiamo eseguire da qualsiasi posizione ci troviamo; infatti virtualenv continua a "mantenere l'ambiente" indipendentemente dal percorso in cui si trova il prompt.
+
+	()$ pip install django
+	.....
+
+Per essere sicuri che Django sia stato correttamente installato, possiamo eseguire questo test:
+
+	()$ python -c "import django; print(django.get_version())"
+	3.1.7
+
+Accertiamoci infine che Django sia effettivamente stato correttamente configurato nel nostro ambiente, andremo a chiamare per la prima volta uno speciale script, che useremo spesso nella configurazione del nostro ambiente, chiamato django-admin.py.
+
+Nel nostro caso, chiediamo la versione del nostro ambiente:
+
+	()$ django-admin.py --version
+	3.1.7
+
+

@@ -1,0 +1,229 @@
+***********************
+06 - Gestione dei form
+     [1.0.1]
+***********************
+
+
+Con l'esempio che segue consentiremo all'utente di inserire un nuovo post che verrà pubblicato sulla home page, formato da un commento e da una immagine jpeg, caricata dall'esterno. Per ora ci accontenteremo di creare un form molto semplice.
+
+Per prima cosa creiamo un nuovo file in .../Hello/feed   che chiamiamo  form.py  e che conterrà il seguente codice:
+
+	from django import forms
+	
+	class PostForm(forms.Form):
+		text = forms.CharField()
+		image = forms.FileField()
+
+La classe PostForm() eredita la classe forms.Form e contiene due campi (fields), il primo è un testo di commento, il secondo è l'upload di un file.
+
+Aggiungiamo ora la nostra view operando sul file .../Hello/feed/views.py
+
+Anche questa sarà una view basata sulle classi e per la precisione sulla classe FormView, che andiamo ad importare. Importeremo anche PostForm dal file locale forms.py che abbiamo appena creato.
+
+	from django.views.generic  import ...., FormView
+	from .forms import PostForm
+	.......
+	class AddPostView(FormView):
+		template_name = "new_post.html"
+		form_class = PostForm
+		success_url ="/"
+		
+		def form_valid(self, form):
+		
+			new_object = Post.objects.create(
+				text = form.cleaned_data['text'],
+				image = form.cleaned_data['image']
+			)
+		
+			return super().form_valid(form)
+
+Dato che AddPostView eredita da FormView una serie di proprietà e metodi già preconfezionati e che hanno valori e comportamenti già predeterminati, vale la pena di dare una attenta lettura della documentazione della libreria (usando ad esempio il citato su http://ccbv.co.uk).
+
+Andiamo a valorizzare alcune importante variabili:
+
+	template_name  al solito indica la pagina "fisica" che verrà gestita da Django 
+	               e che andremo a creare nel prossimo passaggio.
+
+	form_class     è la classe gestita dalla view, definita nel passaggio precedente 
+	               ed inserita fra gli import; in questo caso la classe PostForm.
+
+	success_url    è la pagina da aprire in caso di successo, nel nostro caso la 
+	               homepage, cioè "/".
+		
+Nella stessa classe andiamo a creare un metodo, ovvero a fare l'overload del metodo ereditato form_valid() ed in questo nostro metodo facciamo due cose: andiamo a creare un nuovo oggetto Post; usando un vecchio gergo, possiamo considerare il salvataggio di un nuovo record (l'oggetto) nella tabella Post (la classe).
+
+Chiaramente la creazione di un oggetto Post comprende l'assegnazione alle proprietà text ed image di due elementi del form (il secondo argomento del metodo form_valid) dall'insieme "cleaned_data" il quale contiene "text" e "image" che provengono stavolta dalla classe PostForm, che abbiamo definito  nel file form.py .
+
+Una volta creato l'oggetto, il form richiama la url tramite il metodo ereditato form_valid() che restituisce a sua volta un HttpResponse con l'URL da richiamare in caso di successo.
+
+
+Abbiamo bisogno di creare il file "new_post.html" che andremo, al solito, a posizionare nella cartella .../Hello/templates  e che conterrà fisicamente il form che verrà presentato all'utente. Anche stavolta ci appoggiamo al template di base.
+
+	{% extends "base.html" %}
+
+	{% block titolo %}Inserimento nuovo post{% endblock %}
+
+	{% block corpoPagina %} 
+		<form method="POST" action="" enctype="multipart/form-data">
+			{% csrf_token %}
+			{{ form.as_p }}
+			<div>
+				<button type="submit">Conferma</button>
+			</div> 
+		</form>
+	{% endblock %}	
+
+Con HTML abbiamo costruito un sistema classico di gestione di un form di tipo "POST", con un bottone di conferma. 
+
+Il form di tipo "POST", lo ricordiamo, trasmette i dati all'interno della HTTP request, mentre l'altra opzione "GET" trasmette i dati attraverso la URL; è dunque chiaro che i dati di una immagine NON possono essere trasmessi attraverso una url: semplicemente tutti i dati non entrerebbero nella url.
+
+Con il parametro action impostato a "" indichiamo che l'azione è presente nello stesso form di appartenenza.
+
+Quello che conta è invece il parametro  enctype  che è impostato su "multipart/form-data" per consentire al form di codificare correttamente i dati binari delle immagini per poter poi essere elaborate dal form e, nel caso specifico, dal sistema di Django.
+
+Notiamo poi la presenza di un elemento speciale {% csrf_token %}. Questo elemento è un vero e proprio token che serve a Django per superare quello che viene definito come vulnerabilità di tipo "Cross Site Request Forgery".
+
+Il Cross-site request forgery, abbreviato CSRF (o anche XSRF), è una vulnerabilità a cui sono esposti i siti web dinamici quando sono progettati per ricevere richieste da un client senza controllare se la richiesta sia stata inviata intenzionalmente oppure no. In sintesi consente ad un intruso che controlla un sito malevolo di inviare richieste autenticate a nome della vittima, abusando così dei suoi privilegi presso un servizio online.
+
+Inserendo il token nel form, Django considererà il post generato dal form come attendibile ed accetterà il submit dell'utente; viceversa un submit da parte di un agente malevolo esterno (una web page che imita il nostro submit) che NON conterrà il token verrà automaticamente ignorato.
+
+Subito dopo il token troviamo il tag personalizzato che fa riferimento all'oggetto form, che troviamo nella documentazione di FormView, alla descrizione del metodo get_context_data() che a sua volta richiama get_form() e dunque, senza complicarci la vita, possiamo usare "form" come elemento da usare nel tag.
+
+L'oggetto form ha diversi metodi che velocizzano la gestione dell'aspetto, ad esempio  form.as_ul  mostra tutti gli input come lista puntata,  form.as_p mostra ciascun input su paragrafi separati, form.as_table in modalità tabella; abbiamo scelto as_p per maggiore pulizia d'aspetto. 
+
+Verranno visualizzate anche delle label di default, di cui non ci occupiamo per ora.
+
+Infine in una zona "div" andremo ad inserire un pulsante di "submit" in stile HTML.
+
+
+Dobbiamo ora inserire la nostra pagina fra le url operative della App feed.  Apriamo quindi .../Hello/feed/urls.py ed aggiungiamo la url della nostra nuova pagina, dove andiamo ad usare la classe AddPostView(), dopo averla opportunamente importata.
+
+	from .views import HomePageView, PostDetailView, AddPostView
+	....
+	urlspatterns = [
+		....
+		path('post/', AddPostView.as_view(), name='post'),
+	]
+	
+Possiamo visualizzare la nostra pagina con l'url "localhost:8000/post", ma possiamo fare qualcosa di meglio: inserire un link che la richiami all'intenro della stessa homepage; aggiungiamo una riga all'inizio del nostro blocco di corpo pagina del file .../Hello/templates/home.html:
+
+	.....
+	{% block corpoPagina %} 
+
+		<a href="{% url 'feed:post' %}"> Inserisci un nuovo post &rarr </a>
+		<hr>
+
+		{% for post .....
+			......
+		{% endfor %}
+	{% endblock %}
+
+Andiamo cioè con HTML a creare un semplice riferimento ad una pagina esterna sfruttando ancora la funzione url.
+
+Avviando la homepage siamo in grado di richiamare la pagina che contiene il form ed inserire nuovi post; ogni nuovo post si aggiungerà di volta in volta a quelli già esistenti.
+
+
+Sessioni e Gestione dei messaggi
+--------------------------------
+
+Prima di eseguire ulteriori migliorie alla nostra app, facciamo chiarezza sul concetto di SESSIONI, che descriviamo così come definito da Google Analytics
+
+Le sessioni (dette anche visite) sono un gruppo di interazioni che un utente compie con il sito web in un determinato arco di tempo o all'intero di una campagna. All’interno di una sessione, un utente può compiere diverse azioni, come visualizzare una o più pagine, iscriversi alla newsletter, compilare una richiesta di informazioni oppure, nel caso di un e-commerce, effettuare un acquisto.
+
+In altri termini possiamo considerare la sessione come un contenitore per le azioni intraprese da un utente sul sito.
+
+Un singolo utente può aprire più sessioni, che possono verificarsi nello stesso giorno o nell'arco di diversi giorni, settimane o mesi e al termine di una sessione, esiste l'opportunità di iniziare una nuova sessione. 
+
+Esistono due tipi di sessioni distinte in base al tipo di scadenza che può essere...
+
+ - Basata sul tempo (dopo 30 minuti o a mezzanotte)
+ - Per cambio di campagna (es. accesso da link o da motore di ricerca)
+
+
+Lo scopo che ci prefiggiamo in questo paragrafo è quello di gestire un messaggio di avvenuta registrazione all'interno della homepage e lo faremo attraverso la gestione della sessione.
+
+Su https://docs.djangoproject.com/en/3.2/ref/contrib/messages/ la gestione dei messaggi è ben documentata e vale la pena darci una buona lettura per comprendere i prossimi passaggi.
+
+Per prima cosa apriamo il file .../Hello/feed/views.py  ed inseriamo il seguente codice a quello esistente:
+
+	from django.contrib import messages
+	.....
+	
+	class AddPostView(FormView):       # esistente
+
+		def dispatch(self, request, *args, **kwargs):
+			self.request = request
+			return super().dispatch(request, *args, **kwargs)
+
+		def form_valid(self, ......
+			......
+			messages.add_message(self.request, messages.SUCCESS, 'Post registrato!')
+			return ....
+	....
+
+L'import che abbiamo messo all'inizio sfrutta quello che esiste già in Django e definito nel file .../Hello/Hello/settings.py sia nella sessione MIDDLEWARE sia in TEMPLATE / OPTIONS / context_processors.  Questo significa è aggiunto a qualsiasi template automaticamente.
+
+Abbiamo bisogno di aggiungere nella classe AddPostView() un riferimento a request che è un riferimento, un handle alla pagina html, proprio nel momento in cui questa viene creata (stati di "on_create" dei vecchi linguaggi ad eventi).
+
+In modo furbo creiamo un metodo in overload che si "ruba" il valore di request che gli arriva come parametro e poi "fa passare" l'evento dispatch() originario della classe per non "bloccare" l'esecuzione della stessa.
+
+Andiamo a modificare il metodo form_valid() aggiungendo un messaggio di tipo SUCCESS all'interno dei messaggi della nostra sessione. 
+
+A tal proposito, nella documentazione ufficiale di "contrib/messages" troviamo una indicazione sui vari livelli di messaggio che possiamo creare:
+
+	DEBUG	 messaggio ad uso degli sviluppatori
+	INFO	 messaggio di tipo informativo
+	SUCCESS	 messaggio di avvenuta azione
+	WARNING	 messaggio di avvertimento
+	ERROR	 messaggio di errore
+
+Anzichè usare il metodo add_message() possiamo usare dei metodi diretti legati all'ggetto messages:
+
+	messages.debug(request, '%s SQL statements were executed.' % count)
+	messages.info(request, 'Three credits remain in your account.')
+	messages.success(request, 'Profile details updated.')
+	messages.warning(request, 'Your account expires in three days.')
+	messages.error(request, 'Document deleted.')
+
+L'uso del template dei messaggi è opportuno soprattutto se si intende usare Bootstrap (ne parleremo nel prossimo capitolo).
+
+Per usare un messaggio possiamo copiare/incollare il codice che ci viene suggerito nella pagina di documentazione di django in forma di tag template; cosa che facciamo andando ad inserire proprio questo codice NON nella homepage, ma all'interno del template di base .../Hello/templates/base.html
+
+Il blocco è costituito da un  {% if message %} ... {% endif %}  che attiva un ciclo di lettura di tutti i messaggi presenti nella sessione, SE presenti e li presenta (possiamo avere più di un messaggio) sotto forma di elenco puntato.
+
+	<!DOCTYPE html>
+	...........
+	
+	<body>
+		{% if messages %}
+			<ul class="messages">
+				{% for message in messages %}
+					<li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+				{% endfor %}
+			</ul>
+		{% endif %}
+		.............
+	</body>
+	
+	</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

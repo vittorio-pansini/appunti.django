@@ -1,0 +1,277 @@
+*****************************
+03 - Models View e Template 
+     [1.2.0]
+*****************************
+
+
+In questo capitolo tratteremo e creeremo nell'ordine un MODELLO, una VIEW e un TEMPLATE, definendo le tre categorie che abbiamo trattato parlando di MTV nel secondo capitolo e lo faremo creando una struttura di esempio.
+
+Creeremo una APP all'interno della quale definiremo un MODEL ovvero una struttura dati; il modello sarà una tabella di sole due colonne, che renderemo gestibili dall'Admin, che abbiamo attivato nel precedente esempio.
+
+D'ra in avanti, per una migliore lettura, indicherò il percorso dei progetti Django con "..."; ad esempio  ~/progetti/Django/Hello  oppure  ~/progetti/Django/virtualenv/djangoenv   diventeranno rispettivamente   .../Hello   e   .../virtualenv/djangoenv   e così via.
+
+
+App di Django
+-------------
+
+Il concetto di applicazione è uno dei più potenti in Django: il progetto Django è formato da più applicazioni, che potremmo considerare come "moduli" all'interno dei quali viene sviluppata una parte del funzioanmento del nostro sito.
+
+Ad esempio in un sito di eCommerce avremo l'applicazione del carrello, quella dell'autenticazione utente, e così via. 
+
+Una applicazione Django è fatta di tante App; queste vanno esplicitamente create o "avviate", come si usa dire nello slang Django, con ...
+
+	()$ python manage.py startapp feed
+
+Il comando determina la creazione della app "feed" e consiste nella creazione di una sottocartella all'interno del percorso "root" del progetto, nel nostro caso nel primo livello di "Hello", che viene popolata di altrettanti file ...
+
+	[Hello]
+
+		[feed]
+			[migrations]
+				__init__.py		  file di inizializzazione
+				0001_initial.py   codice di definizione 
+				.....
+			__init__.py		      file di inizializzazione
+			admin.py		      interfacce di amministrazione
+			apps.py			      entry point dell'app
+			models.py             gestore comunicazione modello-dati
+			tests.py		      test di funzionamento dell'app
+			views.py		      gestore delle view
+
+		[Hello]
+			...
+			settings.py
+			...
+		
+		manage.py
+
+All'interno di [feed] troviamo una cartella che si chiama [migrations] e che contiene tutte le variazioni alle logiche di business, in particolare ai dati, molto utili quando si deve lavorare in un gruppo di lavoro e si devono eseguire delle variazioni sulle strutture dei dati stessi.
+
+In questo caso possiamo considerare ogni variazione come un file .py che viene aggiunto all'interno di [migrations] ed in questo modo il codice (condiviso con git, ad esempio) costituisce un sistema efficace di controllo delle variazioni strutturali al database. Ne parleremo approfonditamente nel prossimo paragrafo
+
+La nostra app va ora attivata e, per farlo, dobbiamo inserire una istanza all'interno di un file che si trova sotto il secondo livello di Hello che si chiama settings.py (vds. schema qui sopra).
+
+Nel file cerchiamo la sezione INSTALLED_APPS ed accodiamola sotto quelle già presenti, inserendo il nome del nostro percorso (e della app) fra apici singoli e seguita da una virgola, come vediamo in quelle predefinite e prima della parentesi quadra di chiusura; aggiungeremo ...   
+
+	'feed',
+
+
+Creazione di un Modello
+-----------------------
+
+Django gestisce i database in modo astratto e lo fa attraverso i MODELLI 
+
+Quello che ci apprestiamo a fare è la generazione di una tabella all'interno del nostro database, ma non ci dovremo occupare di tutti i dettagli come si fa in altri linguaggi
+
+Possiamo dire che con Django non dobbiamo gestire il nostro database praticamente in alcun modo.
+
+La generazione avviene automaticamente attraverso la forma di modelli di migrazione.
+
+Descriveremo il nostro modello seplicemente in una forma di classe Python e Django andrà automaticamente a mappare un database che non possiamo nemmeno vedere. 
+
+I dati saranno comunqe modificabili successivamente.
+
+In questo capitolo quello che faremo è creare un file del nostro nuovo modello che chiameremo semplicemente "post", appartenente alla app "feed", che andremo poi ad attivare nell'area admin di Django in modo che possa essere visibile.
+
+Apriamo il file   models.py   che si trova nel percorso "feed" (o comunque nel percorso della app di appartenenza) e vi troveremo un commento  "# Create your models here" che va rimosso, poi inseriamo il seguente codice (lasciando inalterata l'import).
+
+
+	class Post(models.Model):
+		text = models.CharField(max_length=140, blank=False, null=False)
+
+
+In questo modo possiamo dire a Django di cercare nuove modifiche, in seguito a cui verrà generato un file di migrazione e quindi eseguito il provisioning del nostro database in modo che abbia una tabella denominata feed_post. In questo caso con il termine provisioning stiamo indicando esattamente la "posa in opera" della tabella che useremo nel nostro progetto.
+
+Il nostro modello "post" per ora conterrà solo un elemento stringa (CharField) di massimo 140 caratteri, che non potrà essere vuoto (opzione blank), dunque obbligatorio e non vogliamo che sia null, quindi poniamo a False l'opzione.
+
+Salviamo il file e dal prompt genereremo un file di migrazione tramite il comando ...
+
+	()$ python manage.py makemigrations
+
+Se non ci sono errori, verrà generato nel percorso un nuovo file, ad esempio   0001_initial.py  sempre nel percorso di feed.
+
+Se andiamo ad aprire questo nuovo file noteremo che si tratta di un vero e proprio eseguibile che andrà a creare una nuova tabella di due colonne, dove nella prima colonna sarà aggiunto automaticamente l'id del record.
+
+Non ci rimane che generare la tabella all'interno del database con un comando che abbiamo già usato...
+
+	()$ python manage.py migrate
+
+Salvo errori, la console ci dirà che è stata creata la tabella Post, come ci aspettiamo che avvenga.
+
+Quello che vediamo nell'immediato è la crazione di un nuovo percorso sotto [feed] che si chiama [migrations] e che contiene a sua volta due altri file:   __init__.py  che al solito funge da inizializzatore ed un file nuovo che si chiama 0001_initial.py il quale contiene la definizione vera e propria della tabella (del modello) Post.
+
+Ora che la tabella è stata creata dovrebbe essere visibile almeno dall'administrator, invece non è così; è necessario renderlo disponibile.
+
+Il prossimo passaggio è quello di registrare il nostro modello all'interno del file    admin.py   che si trova nel percorso [feed], ovvero inserire al suo interno il seguente codice:
+
+	...
+	from .models import Post
+
+	class PostAdmin(admin.ModelAdmin):
+		pass
+
+	admin.site.register(Post, PostAdmin)
+
+
+Intanto importiamo Post leggendolo dal file models.py che abbiamo modificato all'inizio e poi creiamo una classe che chiamiamo PostAdmin, che, a sua volta, eredita la classe admin.ModelAdmin.  Gli oggetti di tipo PostAdmin che andremo a creare attraverso questa classe, grazie a proprietà e metodi ereditati da admi.ModelAdmin, saranno gestibili nell'interfaccia dell'amministratore del nostro sito, come vedremo tra poco.
+
+L'istruzione successiva collega la classe Post con PostAdmin. In altre parole la casse ModelAdmin verrà arricchita con la nostra classe Post, quella che abbiamo definito all'inizio.
+
+Vediamo il risultato. Dopo aver riavvato il nostro server [ python manage.py runserver ] apriamo la pagina di amministratore con l'url ...
+
+	http://127.0.0.1:8000/admin/
+	
+Vi troveremo la nuova app [feed] e, al suo interno, un nuovo elemento che si chiama appunto [Post].
+
+Questo sarà manipolabile all'interno della pagina di amministratore, possiamo aggiungere un nuovo post, cancellarlo o modificarlo.
+
+Notiamo subito una cosa dopo aver provato ad inserirne uno: il fatto che il testo viene salvato come "Post object(1)" e i successivi saranno numerati in sequenza. Questo accade perchè in Django ogni cosa viene considerata un oggetto e l'accesso è praticamente una chiamata ad un oggetto.
+
+Possiamo rendere la gestione degli oggetti più "gradevole" ad esempio mettendo la data e l'ora del post oppure qualcos'altro.
+
+A puro titolo di esempio decidiamo di mettere come nome dell'oggetto proprio il suo contenuto. Modifichiamo  models.py  come aggiungendo alla classe il seguente metodo:
+
+		def __str__(self):
+			return self.text
+
+In questo modo il nome dell'oggetto coinciderà col suo contenuto.
+
+Se facciamo il refresh della pagina dell'amministratore tutto appare molto più ergonomico, con il contenuto del testo che si sostituisce a quello dell'oggetto.
+
+
+Creazione della View
+--------------------
+
+Ora che il modello è stato creato e la base dati è stata definita, possiamo procedere con la creazione della prima view.  Le view ci consentono di definire basilarmente quello che dovrà essere mostrato nel front end del client.
+
+Ciò che vogliamo fare è creare una nuova home page che all'inizio sarà un po' brutta, ma che andremo via via ad arricchire; in altri termini lavoreremo principalmente sul back-end per poi spostarci sul front-end.
+
+Incominciamo da quello che viene creato direttamente da Django, cioè la pagina di admin.
+
+Apriamo il file  .../Hello/Hello/urls.py
+
+Vi troveremo gli url che sono attualmente attivi nel nostro progetto ed in particolare troveremo la lista urlpatterns ...
+
+	from django.contrib import admin
+	from django.urls import path
+
+	urlpatterns = [
+		path('admin/', admin.site.urls),
+	]
+
+... che individua appunto il percoso admin che richiamiamo dalla omonima url; infatti la url indicata fra apici è quella che richiama effettivamente l'oggetto admin.site.urls e ad essa possiamo liberamente dare un nome differente, come 'amministratore/' oppure 'root-panel/' eccetera. In questo momento la lista è formata da un solo elemento e si noti la virgola finale che non è un errore di digitazione.
+
+------------------------------------------------------------------------------------
+	Va detto che questo elemento è stato molto migliorato nella versione 3 di Django, perchè il precedente formato (della versione 2) imponeva un sistema sintattico un po' più complesso e che francamente esponeva ad errori; ecco un esempio della versione 2 (la si riporta per completezza):
+
+		urlpatterns = patterns('',
+			url(r'^admin/', include(admin.site.urls)),
+			url(r'^hello/$', "hello.views.hello"),		# url aggiunta 
+		)
+
+------------------------------------------------------------------------------------
+
+Il funzionamento di  urls.py  è strettamente legato ad un altro file che si chiama   views.py  nel quale sono contenute le funzioni o le classi corrispondenti ad una determinata chiamata. Ad ogni elemento path() della lista urlpatterns di  urls.py  dovrà corrispondere una funzione o una classe che dovrà fare qualcosa, ad esempio, recuperare delle informazioni dal database, fare dei calcoli e restituire una pagina web (ma anche non necessariamente un'azione del genere).
+
+Quando l'utente digita l'url richiesto, Django richiama la view corrispondente che è indicata nella riga e, se tutto è stato predisposto correttamente, eseguirà la funzione o la classe corrispondente alla url associata.
+
+A questo punto la fonte da cui sono tratti questi appunti ci rivela che la scelta migliore da fare è quella di legare le url del nostro applicativo ad una classe piuttosto che una funzione, perchè tale scelta risulta più professionale rispetto ad una più semplice soluzione "a funzioni".
+
+In altre parole, la soluzione di usare view basate su funzioni (function based views) è valida ed efficace, ma si rinuncia alla possibilità di sfruttare le potenzialità della programmazione ad oggetti di Python, basata sulle classi (class based view).
+
+Predisponiamo allora una classe di risposta nella nostra app "feed" ed apriamo (o creiamo) il file .../Hello/feed/views.py
+
+Se il file esiste già troveremo una import già al suo interno ...
+
+	from django.shortcuts import render
+
+... che predispone di fatti alla creazione di views basate su funzioni; dato che a noi interessa definire views basati su classi, rimuoviamo o commentiamo questa import ed inseriamo il seguente codice:
+
+	from django.views.generic import TemplateView
+	
+	class HomePageView(TemplateView):
+		template_name = "home.html"
+
+
+La classe HomePageView eredita la classe TemplateView;  il valore di  template_name  indica a Django di cercare un template che si chiama "home.html", che andremo a creare più tardi.
+
+Ora che abbiamo creato la classe, dobbiamo fare in modo che questa venga agganciata da un url dell'utente, ma NON interverremo sul file .../Hello/Hello/urls.py  che abbiamo aperto prima, ma su un file "locale" della app feed.
+
+Questo è un nuovo file; nel percorso  .../Hello/feed  andiamo a creare il file  urls.py ed inseriamo il seguente codice:
+
+	from django.urls import path
+	from .views import HomePageView
+	
+	app_name = 'feed'
+		
+	urlpatterns = [ 
+		path( '',  HomePageView.as_view(), name='index'),
+	]
+
+Notiamo che nella import abbiamo anteposto il punto alla parola views perchè vogliamo che sia importata la classe contenuta nel file locale di "feed" ed importiamo la nostra classe HomePageView.
+	
+Definiamo la variabile app_name che andremo ad usare successivamente.
+
+Nella lista degli urlpatterns andiamo ad inserire invece la voce path() della nostra homepage, che indica con gli apici vuoti, appunto che si tratta di una homepage.  Nel secondo parametro di path usiamo il metodo as_view() che la nostra classe HomePageView ha ereditato da TemplateView e che serve a renderizzare la nostra logica.  Infine con l'utimo parametro daremo alla nostra homepage il nome "index".
+
+Infine dobbiamo intervenire sul file che abbiamo visto all'inizio cioè  .../Hello/Hello/urls.py  dove andremo ad inserire delle righe a quelle già esistenti e che, per semplicità, evidenzieremo con un "#" in coda.
+
+	from django.contrib import admin
+	from django.urls import path
+	from django.conf.urls import include						#
+	
+	from feed import urls as feed_urls							#
+
+	urlpatterns = [
+		path('admin/', admin.site.urls),
+		path('', include(feed_urls, namespace='feed')),			#
+	]
+
+La prima import ci consente di usare la include() mentre la seconda importa tutte le urls di feed all'interno della root.
+
+Ancora una volta scegliamo di lasciare '' nel parametro della url per fare in modo che sia agganciata come homepage.
+
+
+Creazione del Template
+----------------------
+
+Manca ora solo un template che contribuisca al funzionamento di tutto il sitema finora creato. Se si avviasse il progetto così com'è e si tentasse di agganciare la rooot otterremmo infatti un errore che indica proprio l'assenza del template (ovvero che non è possibile agganciare il template).
+
+Dobbiamo anzitutto dire a Django dove cercare i templates e lo facciamo agendo sul file .../Hello/Hello/settings.py
+
+Per prima cosa inseriamo all'inizio di settings.py, se non già presente, una import che ci servirà tra poco:
+
+	import os
+
+Andiamo poi ad individuare la sezione TEMPLATES e, qualche riga prima, andiamo a definire la variabile TEMPLATE_DIR con l'istruzione ...
+
+	TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
+
+... con BASE_DIR che è   .../Hello   definita secondo il sistema operativo che stiamo usando proprio all'inzio di settings.py e che viene concatenata, sempre secondo i canoni del sistema in uso, al percorso .../Hello/templates che dovrebbe essere già stato creato in automatico e che conterrà tutti i nostri template.
+
+Quindi all'interno della sezione TEMPLATES andiamo a caricare la variabile; la riga ...
+
+	'DIRS': [],
+
+... diventa ...
+
+	'DIRS': [TEMPLATE_DIR],
+
+Chiudiamo il nostro file di definizione e portiamoci nel percorso .../Hello/templates e se non esiste lo creiamo; nello stesso percorso andiamo a creare il file che abbiamo citato nel file .../Hello/feed/views.py cioè home.html
+
+Con PyCharm è facile creare dei file html 5 ma ad ogni modo il contenuto dovrebbe essere simile al seguente:
+
+	<!DOCTYPE html>
+	<html lang="it">
+	<head>
+		<meta charset="UTF-8">
+		<title>Title</title>
+	</head>
+	<body>
+		<h1>Ciao Mondo</h1>
+	</body>
+	</html>
+
+A questo punto la chiamata al sito dovrebbe determinare automaticamente l'apertura di questa pagina web di prova, anche se a volte può essere necessario riavviare Django per ottenere che la pagina venga correttamente caricata.
+
+Con la creazione del template possiamo considerare chiuso il cerchio della definizione di uno scheletro basilare della nostra applicazione.
