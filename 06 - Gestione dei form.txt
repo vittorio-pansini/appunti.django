@@ -1,8 +1,93 @@
 ***********************
 06 - Gestione dei form
-     [1.0.1]
+     [2.0.1]
 ***********************
 
+Il form è l'interfaccia web per ricevere l'input da parte dell'utente.
+
+Esso ha degli attributi che spercificano a quale URL il browser deve inviare i dati e quale metodo deve utilizzare per inviare i dati, metodi che possono essere GET o POST.
+
+La differenza fra l'uno e l'altro metodo è nel tipo di HttpRequest che viene fatta al nostro sito web: in modo molto sintetico, possiamo affermare che GET invia i dati all'interno della URL stessa (insieme all'indirizzo della pagina che richiamiamo, con i dati che sono direttamente leggibili sulla barra degli indirizzi), mentre POST li implementa nel corpo della HttpRequest stessa.
+
+Il form è racchiuso fra i tag   <form>...</form>  e contiene tre attributi fondamentali:
+
+	• method	che può assumere i valori "get" o "post" come detto.
+	
+	• action	che contiene l'URL cui inviare i dati; se omesso per default il
+				form che riceve i dati è lo stesso che li invia.
+	
+	• enctype	indica il tipo di codifica da utilizzare e viene impostato di
+				solito quando l'input è usato per fare l'upload di file, ad
+				esempio di immagini; "application/x-www-form-urlencoded" è il
+				valore di default, ovvero l'input generico e può essere omesso,
+				mentre "multipart/form-data" indica l'upload.
+
+All'interno del form possono esservi diversi elementi che costituiscono l'input da parte dell'utente; ciascun elemento è individuato da un identificativo, una stringa che viene indicata all'interno con l'attributo  id="..." e che serve ad identificare univocamente l'oggetto DOM per la gestione dei dati che vi confluiscono.
+
+Da notare che esiste un altro attributo di identificazione,  name="..."  che funziona similmente, ma differisce da "id" per il fatto che quest'ultimo è utilizzato per identificare UNIVOCAMENTE un elemento nel DOM e pertanto non dovrebbero esistere più elementi con lo stesso id; è invece possibile avere più elementi con lo stesso valore "name", utile se si vuole gestire un gruppo di elementi in forma di array di oggetti. Normalmente è buona abitudine usare "id" e "name" con lo stesso valore.
+
+In HTML5, come retaggio del passato, textbox, check box e perfino pulsanti sono gestiti con il tag generico   <input ..... >   che ha perso la necessità di avere un tag di chiusura </input> e affida invece il suo funzionamento ai vari attributi che differenziano il suo aspetto e funzionamento.
+
+In particolare il valore type indica il tipo di oggetto che deve essere renderizzato nella pagina del browser; ad onor del vero l'approccio di descrivere il tag <input> è meno funzionale e dunque in questi appunti si cercherà invece di differenziare l'input per modalità
+
+
+<input type="button">
+<input type="checkbox">
+<input type="color">
+<input type="date">
+<input type="datetime-local">
+<input type="email">
+<input type="file">
+<input type="hidden">
+<input type="image">
+<input type="month">
+<input type="number">
+<input type="radio">
+<input type="range">
+<input type="reset">
+<input type="search">
+<input type="submit">
+<input type="tel">
+<input type="time">
+<input type="url">
+<input type="week">
+
+
+
+Ecco di seguito l'elenco degli elementi maggiormente utilizzati negli input:
+
+Label		
+	
+	Le label servono per indicare all'utente il tipo di input richiesto e differiscono dal semplice testo perchè è il browser che gestisce il loro posizionamento a seconda dell'input stesso; il testo della label va posto fra i tag   <label>...</label>
+	
+	Un attributo fondamentale della label è  for="..."  che si usa per agganciare la label all'elemento di input relativo; se abbiamo dato ad un checkbox id="mioCheck" con for="mioCheck" andiamo ad "agganciare" la label a detto checkbox.
+	
+Textbox
+
+	L'input di tipo testo è gestito dal tag  <input> con l'attributo type="..." che determina i seguenti comportamenti:
+	
+		"text"			input di testo in chiaro
+		
+		"password"		input di testo celato di tipo password
+		
+	
+	Si applicano inoltre i seguenti attributi:
+	
+		id="..."		identifica univocamente l'input da gestire
+		
+		placeholder="..."	suggerimento che compare (di solito in grigio) sul
+						campo prima dell'input dell'utente e scompare appena
+						dopo l'inserimento del primo carattere.
+		
+		name="..."		nome del campo di input
+		
+		value="..."		valore di default del campo
+
+
+
+
+Un esempio breve di form
+------------------------
 
 Con l'esempio che segue consentiremo all'utente di inserire un nuovo post che verrà pubblicato sulla home page, formato da un commento e da una immagine jpeg, caricata dall'esterno. Per ora ci accontenteremo di creare un form molto semplice.
 
