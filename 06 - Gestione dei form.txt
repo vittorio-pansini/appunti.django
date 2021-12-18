@@ -28,60 +28,200 @@ Da notare che esiste un altro attributo di identificazione,  name="..."  che fun
 
 In HTML5, come retaggio del passato, textbox, check box e perfino pulsanti sono gestiti con il tag generico   <input ..... >   che ha perso la necessità di avere un tag di chiusura </input> e affida invece il suo funzionamento ai vari attributi che differenziano il suo aspetto e funzionamento.
 
-In particolare il valore type indica il tipo di oggetto che deve essere renderizzato nella pagina del browser; ad onor del vero l'approccio di descrivere il tag <input> è meno funzionale e dunque in questi appunti si cercherà invece di differenziare l'input per modalità
-
-
-<input type="button">
-<input type="checkbox">
-<input type="color">
-<input type="date">
-<input type="datetime-local">
-<input type="email">
-<input type="file">
-<input type="hidden">
-<input type="image">
-<input type="month">
-<input type="number">
-<input type="radio">
-<input type="range">
-<input type="reset">
-<input type="search">
-<input type="submit">
-<input type="tel">
-<input type="time">
-<input type="url">
-<input type="week">
-
-
+In particolare il valore type indica il tipo di oggetto che deve essere renderizzato nella pagina del browser; ad onor del vero l'approccio di descrivere il tag <input> è meno funzionale e dunque in questi appunti si cercherà invece di differenziare l'input per modalità.
 
 Ecco di seguito l'elenco degli elementi maggiormente utilizzati negli input:
 
-Label		
+
+LABEL		
 	
 	Le label servono per indicare all'utente il tipo di input richiesto e differiscono dal semplice testo perchè è il browser che gestisce il loro posizionamento a seconda dell'input stesso; il testo della label va posto fra i tag   <label>...</label>
 	
 	Un attributo fondamentale della label è  for="..."  che si usa per agganciare la label all'elemento di input relativo; se abbiamo dato ad un checkbox id="mioCheck" con for="mioCheck" andiamo ad "agganciare" la label a detto checkbox.
 	
-Textbox
+	Esempio:
+	
+		<label for="nome">Nome utente:</label>
+	
+	
+TEXTBOX
 
 	L'input di tipo testo è gestito dal tag  <input> con l'attributo type="..." che determina i seguenti comportamenti:
 	
 		"text"			input di testo in chiaro
-		
+
 		"password"		input di testo celato di tipo password
+
+		"number"		input di un numero intero che ha anche dei pulsanti per
+						incrementare/decrementare il valore.
+
+		"search"		usato per i campi di ricerca
+
+		"tel"			usato per input di numeri di telefono
 		
+		"email"			input controllato per gli indirizzi email
+		
+		"url"			usato per input di URL
+
+		"date"			casella di testo speciale che gestisce le date con la
+						comparsa di un calendario a discesa; è possibile usare
+						gli attributi stringa "min" e "max" per consentire di
+						porre un limite alle date in input.
+
+		"datetime-local"	come "date" ma con in più la gestione dell'ora
+		
+		"month"			input controllato per mese ed anno come "date"
+						
+		"time"			usato per input di orari, come "date"
+		
+		"week"			usato per input del numero di settimana
+		
+	Si noti che molte di queste caselle di input sembrerebbero rindondanti; in realtà l'uso di un "type" specifico fa risparmiare molta fatica sia perchè il rendering viene fatto direttamente dal browser, sia perchè è il browser stesso a VALIDARE il contenuto.
 	
-	Si applicano inoltre i seguenti attributi:
+	Come vedremo, infatti, sarà importante capire se il form viene tornato in modalità "valid" o meno nella view che andremo a creare.
 	
-		id="..."		identifica univocamente l'input da gestire
-		
-		placeholder="..."	suggerimento che compare (di solito in grigio) sul
-						campo prima dell'input dell'utente e scompare appena
-						dopo l'inserimento del primo carattere.
-		
-		name="..."		nome del campo di input
-		
-		value="..."		valore di default del campo
+
+	Esempi:
+	
+		<input type="text" id="username" name="username">
+		<input type="password" id="pwd" name="pwd">
+		<input type="date" id="compleanno" name="compleanno">
+		<input type="number" id="quantity" name="quantity" 
+			   min="0" max="100" step="10" value="30">
+
+CHECKBOX
+
+	I checkbox sono realizzati ancora dal tag="input" e type="checkbox" e possono essere associati ad un valore che viene restituito in output. Esempio:
+	
+		<input type="checkbox" id="veicolo" name="veicolo" value="Automobile">
+	
+	
+RADIOBOX	
+	
+	I radiobox definiti da type="radio" devono essere gestiti in gruppi, che a loro volta sono individuati dallo stesso tag "name", come si vede nell'esempio che segue:
+	
+		<input type="radio" id="html"
+			name="linguaggio" value="HTML">
+				<label for="html">HTML</label><br>
+
+		<input type="radio" id="css"
+			name="linguaggio" value="CSS">
+				<label for="css">CSS</label><br>
+
+		<input type="radio" id="javascript"
+			name="fav_language" value="JavaScript">
+				<label for="javascript">JavaScript</label>
+
+
+COLOR
+
+	Questo input, attivato con type="color", viene gestito interamente dal browser e serve a ricavare un valore esadecimale che si riferisce ad un colore selezionato. 
+	
+	A seconda del supporto del browser, nel campo di input può essere visualizzato un selettore di colori.
+	
+		<input type="color" id="mioColore" name="mioColore">
+	
+
+RANGE
+
+	Definito dal type="range", si tratta di un selettore a slide che consente di accettare un input da un valore minimo ad uno massimo, utile per fornire un sistema intuitivo di input di un valore numerico.
+	
+		<input type="range" id="vol" name="vol" min="0" max="50">
+
+
+FILE
+
+	L'input definito da type="file", consente di recuperare il percorso sul sistema dell'utente ed è utile per l'upload o la selezione di file che debbano essere successivamente letti.
+	
+	Si tratta di un input gestito completamente dal browser di solito sotto forma di pulsante e finestra di dialogo nello stile preimpostato all'interno del browser stesso.
+	
+		<input type="file" id="mioFile" name="mioFile">
+
+
+HIDDEN
+
+	Quello definito da type="hidden" non è un input controllato dall'utente, ma definisce un campo di input nascosto (non visibile all'utente).
+	
+	Un campo nascosto spesso memorizza il record del database che deve essere aggiornato quando viene inviato il modulo e consente agli sviluppatori Web di includere dati che non possono essere visualizzati o modificati dagli utenti quando viene inviato un modulo.
+
+	Anche se il valore non viene mostrato all'utente nel contenuto della pagina, è visibile (e modificabile) utilizzando gli strumenti di sviluppo di qualsiasi browser o la funzionalità "Visualizza sorgente", quindi è sconsigliato nella gestione di elementi di sicurezza.
+
+		<input type="hidden" id="idUtente" name="idUtente" value="3487">
+
+
+Quelli che seguono NON sono veri e propri campi di input, ma dei tag che consentono di gestire il form; i browser li gestiscono tipicamente come dei pulsanti che generano a loro volta una specifica azione.
+
+
+SUBMIT
+
+	Il tag "input" con type="submit" definisce un pulsante per inviare i dati del modulo a un gestore del modulo.
+
+	Il gestore del modulo è in genere una pagina del server con uno script per l'elaborazione dei dati di input ed è specificato nell'attributo "action" che va inserita nel tag "form" di appartenenza.
+	
+		<form action="/action_submit_page.php">
+			
+			{ ... }
+			
+			<input type="submit" value="Conferma">
+		</form>
+
+
+BUTTON
+
+	Con type="button" definiamo un pulsante svincolato dall'azione di conferma del form e a quella che andiamo a definire manualmente, ad esempio tramite l'attributo onclick, come nell'esempio che segue.
+
+		<input type="button" onclick="alert('Ciao mondo!')" value="Cliccami!">
+
+
+RESET
+
+	Il controllo definito da type="reset" definisce un pulsante che ripristinerà tutti i valori del modulo ai valori predefiniti.
+	
+		<input type="reset" value="Reinizializza">
+
+
+A molti degli input dei tipi descritti, e a seconda della loro tipologia, si applicano i seguenti attributi:
+
+	id				identifica univocamente l'input da gestire
+	
+	placeholder		frase di uggerimento che compare sul campo prima dell'input
+	
+	name			nome del campo di input
+	
+	value			valore di default del campo
+
+	disabled		specifica che un campo deve essere disabilitato
+
+	max 			valore massimo di input
+
+	maxlength 		numero massimo di caratteri inseribili
+
+	min 			valore minimo di input
+
+	pattern 		espressione regolare con cui controllare il valore di input
+					
+	readonly 		specifica se il campo è di sola lettura (non modificabile)
+					
+	required 		specifica se un campo di input è obbligatorio 
+					
+	size 			larghezza (in caratteri) di un campo di input
+	
+	step 			intervalli numerici per un input numerico
+
+	checked			specifica che il checkbox o il ratiobox deve essere spuntato
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
