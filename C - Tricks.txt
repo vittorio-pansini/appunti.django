@@ -1,0 +1,19 @@
+
+
+
+Rimuovere l'errore dell'icona mancante
+--------------------------------------
+
+Se all'avvio compare l'errore ...
+
+	Not Found: /favicon.ico
+
+... vuol dire che Django non trova l'icona giusta da mettere nella barra del browser insieme al titolo.
+
+Per risolvere l'anomalia e far comparire una icona personalizzata della pagina, inserire nella sezione <head>, subito prima del titolo un'istruzione come nell'esempio che segue:
+
+	<link rel="icon" href="{% static 'mioLogo.svg' %}">
+
+... che fa riferimento ad una immagine mioLogo.svg gestita nel percorso statico.
+
+

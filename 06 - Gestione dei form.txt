@@ -9,6 +9,16 @@ Esso ha degli attributi che spercificano a quale URL il browser deve inviare i d
 
 La differenza fra l'uno e l'altro metodo è nel tipo di HttpRequest che viene fatta al nostro sito web: in modo molto sintetico, possiamo affermare che GET invia i dati all'interno della URL stessa (insieme all'indirizzo della pagina che richiamiamo, con i dati che sono direttamente leggibili sulla barra degli indirizzi), mentre POST li implementa nel corpo della HttpRequest stessa.
 
+In altre parole se stiamo eseguendo una pagina che presenta un form, quando questa viene semplicemente richiamata dal browser o da un'altra pagina della nostra applicazione o facciamo il refresh della pagina, la richiesta che arriva alla view è di tipo GET; quando facciamo confermiamo la nostra pagina web, invece, la classe/funzione view riceve una una richiesta di tipo POST.
+
+Questo significa che, nel codice della view possiamo distinguere i due tipi di richiesta in modo differente, ad esempio attivando i controlli formali nel blocco "POST" e facendo altre cose nel blocco "GET".
+
+
+Gestione del form da HTML
+-------------------------
+
+In questo paragrafo accenniamo ai controlli che sono gestiti all'interno dei form, così come da specifiche HTML5
+
 Il form è racchiuso fra i tag   <form>...</form>  e contiene tre attributi fondamentali:
 
 	• method	che può assumere i valori "get" o "post" come detto.
@@ -33,7 +43,7 @@ In particolare il valore type indica il tipo di oggetto che deve essere renderiz
 Ecco di seguito l'elenco degli elementi maggiormente utilizzati negli input:
 
 
-LABEL		
+• LABEL		
 	
 	Le label servono per indicare all'utente il tipo di input richiesto e differiscono dal semplice testo perchè è il browser che gestisce il loro posizionamento a seconda dell'input stesso; il testo della label va posto fra i tag   <label>...</label>
 	
@@ -44,7 +54,7 @@ LABEL
 		<label for="nome">Nome utente:</label>
 	
 	
-TEXTBOX
+• TEXTBOX
 
 	L'input di tipo testo è gestito dal tag  <input> con l'attributo type="..." che determina i seguenti comportamenti:
 	
@@ -89,14 +99,14 @@ TEXTBOX
 		<input type="number" id="quantity" name="quantity" 
 			   min="0" max="100" step="10" value="30">
 
-CHECKBOX
+• CHECKBOX
 
 	I checkbox sono realizzati ancora dal tag="input" e type="checkbox" e possono essere associati ad un valore che viene restituito in output. Esempio:
 	
 		<input type="checkbox" id="veicolo" name="veicolo" value="Automobile">
 	
 	
-RADIOBOX	
+• RADIOBOX	
 	
 	I radiobox definiti da type="radio" devono essere gestiti in gruppi, che a loro volta sono individuati dallo stesso tag "name", come si vede nell'esempio che segue:
 	
@@ -113,7 +123,7 @@ RADIOBOX
 				<label for="javascript">JavaScript</label>
 
 
-COLOR
+• COLOR
 
 	Questo input, attivato con type="color", viene gestito interamente dal browser e serve a ricavare un valore esadecimale che si riferisce ad un colore selezionato. 
 	
@@ -122,14 +132,14 @@ COLOR
 		<input type="color" id="mioColore" name="mioColore">
 	
 
-RANGE
+• RANGE
 
 	Definito dal type="range", si tratta di un selettore a slide che consente di accettare un input da un valore minimo ad uno massimo, utile per fornire un sistema intuitivo di input di un valore numerico.
 	
 		<input type="range" id="vol" name="vol" min="0" max="50">
 
 
-FILE
+• FILE
 
 	L'input definito da type="file", consente di recuperare il percorso sul sistema dell'utente ed è utile per l'upload o la selezione di file che debbano essere successivamente letti.
 	
@@ -138,7 +148,7 @@ FILE
 		<input type="file" id="mioFile" name="mioFile">
 
 
-HIDDEN
+• HIDDEN
 
 	Quello definito da type="hidden" non è un input controllato dall'utente, ma definisce un campo di input nascosto (non visibile all'utente).
 	
@@ -152,7 +162,7 @@ HIDDEN
 Quelli che seguono NON sono veri e propri campi di input, ma dei tag che consentono di gestire il form; i browser li gestiscono tipicamente come dei pulsanti che generano a loro volta una specifica azione.
 
 
-SUBMIT
+• SUBMIT
 
 	Il tag "input" con type="submit" definisce un pulsante per inviare i dati del modulo a un gestore del modulo.
 
@@ -166,14 +176,14 @@ SUBMIT
 		</form>
 
 
-BUTTON
+• BUTTON
 
 	Con type="button" definiamo un pulsante svincolato dall'azione di conferma del form e a quella che andiamo a definire manualmente, ad esempio tramite l'attributo onclick, come nell'esempio che segue.
 
 		<input type="button" onclick="alert('Ciao mondo!')" value="Cliccami!">
 
 
-RESET
+• RESET
 
 	Il controllo definito da type="reset" definisce un pulsante che ripristinerà tutti i valori del modulo ai valori predefiniti.
 	
@@ -209,6 +219,235 @@ A molti degli input dei tipi descritti, e a seconda della loro tipologia, si app
 	step 			intervalli numerici per un input numerico
 
 	checked			specifica che il checkbox o il ratiobox deve essere spuntato
+
+
+• DROPDOWN LIST
+
+	La dropdown list ha una struttura costituita da diversi tag. Osserviamo il prossimo esempio:
+	
+		<select id="modello" name="modello">
+			<optgroup label="Primo gruppo">
+				<option value="1">Primo elemento</option>
+				<option value="2">Secondo elemento</option>
+			</optgroup>
+			<optgroup label="Secondo gruppo">
+				<option value="3">Terzo elemento</option>
+				<option value="4">Quarto elemento</option>
+			</optgroup>
+		</select>
+
+	Il tag "select" racchiude la stuttura della dropdown list, mentre gli elementi selezionabili sono individuati dai vari tag "option" che individuano ciascuno un attributo "value" che è quello che viene poi acquisito dal form.
+	
+	Opzionalmente, come si vede nell'esempio, è possibile raggruppare i vari elementi dando un nome al gruppo (la label); la label compare fra gli elementi, evidenziata ma non selezionabile.
+
+
+• LISTBOX
+
+	E' simile alla dropdown list ma presenta i vari elementi in un'area più ampia, con la possiblità di poterne fare anche una selezione multipla. Per ottenere la list box si usa la stessa identica struttura della dropdown list e si aggiunge l'attributo "multiple" al tag "select", come segue:
+	
+		<select id="modello" name="modello" multiple>
+			.....
+		</select>
+	
+	L'utente potrà usare la combinazione CTRL+click o SHIFT+click per selezionare più di un elemento della lista, tranne le label dei gruppi.
+	
+
+• TEXT AREA
+
+	Il tag "textarea" consente di predisporre un'area di testo libero nella quale l'utente può introdurre del testo che contiene anche i ritorni a capo e senza limite di lunghezza.
+
+		<textarea name="area_testo" id="area_testo"></textarea>
+
+	Si noti che nel caso del tag "textarea" va comunque inserito il tag di chiusura </textarea>.
+	
+
+
+Il Djagno Form Library
+----------------------
+
+Anzichè produrre il form su HTML e poi gestirlo dall'esterno, Django mette a disposizione una libreria che consente di creare la struttura del nostro form dall'interno del codice, che poi viene "consegnata" al template, che si occupa poi della costruzione vera e propria di tutti i tag che abbiamo visto precedentemente.
+
+Come vedremo nel prossimo esempio, erediteremo la classe  django.forms.Form  nella nostra classe view e ciò ci consentirà di costruire letteralmente e gestire i controlli che andiamo poi a mettere nel nostro form.
+
+Per prima cosa creiamo un nuovo file in .../Hello/feed   che chiamiamo  form_gestiti.py  e che conterrà il seguente codice:
+
+	from django import forms
+	
+	class FormUno(forms.Form):
+
+		nome_utente = forms.CharField()
+		password = forms.CharField(widget=forms.PasswordInput)
+	
+La classe FormUno() eredita la classe forms.Form e contiene due campi; il primo è un imput di testo normale, il secondo è un testo di tipo password.
+
+La definizione avviene tramite assengazione ad una proprietà della classe della proprietà ereditata da Form; nel primo caso la classe FormUno è di tipo Form e contiene una proprietà (diciamo una variabile) chiamata nome_utente di tipo CharField.
+
+Ogni volta che assegnamo una proprietà dentro la nostra classe, andiamo a creare un campo esattamente come se lo scrivessimo in html, solo in modo più semplice e gestendo il nostro form come un oggetto.
+
+Ora che abbiamo creato la classe FormUno() dobbiamo implementarla nella classe che gestisce la nostra view; quindi dobbiamo aprire il file di gestione views.py ed andiamo prima ad importare il nostro file dei form ...
+
+	from . import forms_gestiti
+
+... poi andiamo a creare una istanza di FormUno e ad usarla nella classe (o funzione) che gestisce la view ...
+
+	def form01(request):
+
+		istanzaForm = forms_gestiti.FormUno()
+		return render(request, "mioForm.html", {"form": istanzaForm})
+
+Come si vede dal codice, viene creata l'istanza di FormUno che si chiama istanzaForm e viene passata al render della pagina di destinazione, che sarà presente fra i template col nome di "mioForm.html"; l'istanza è passata col nome di "form", semplicemente.
+
+Andiamo a creare l'url che ci serve in .../Hello/url.py come abbiamo già visto...
+
+	...
+		path('form01', feed.views.form01, name='form01'),
+	...
+
+... ed infine andiamo a creare l'html template di destinazione .../Hello/templates/mioForm.html che avrà un aspetto molto semplice:
+
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<title>Form di prova</title>
+	</head>
+	<body>
+		<h1>Form di prova</h1>
+
+		<table>
+
+			{{ form.as_table }}
+
+		</table>
+
+	</body>
+	</html>
+
+In pratica quando Djagno va a renderizzare il form, va a creare automaticamente tutti gli input che abbiamo definito nella classe FormUno, nel punto esatto dove abbiamo inserito il costrutto  {{ form.as_table }} , fra i tag <table></table>.
+
+Nel caso specifico notiamo che i campi sono completi di label e perfettamente incolonnati come su una tabella; questa è la modalità di default, ma possiamo avere altre modalità:
+
+	{{ ###.as_ul }} 	costruisce una struttura puntata fra i tag <ul></ul>.
+	
+	{{ ###.as_p }} 		costruisce una struttura a paragrafi, senza tag.
+
+Una volta completato tutto, avviando Django e raggiungendo la pagina che richiama il form notiamo che abbiamo ottenuto il risultato voluto.
+
+
+Ora chiudiamo il cerchio "traducendo" tutte le precedenti specifiche in quelle date dalla libreria dei form di Django:
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+
+Elemento		Django Form library
+-------------------------------------------------------------------------------
+
+LABEL			La label viene generata automaticamente mettendo il nome della
+				variabile che viene assengata, oppure inserendo il parametro
+				label="..." alla proprietà durante l'assegnazione.
+
+TEXTBOX			forms.CharField()								  testo normale
+				forms.CharField(widget=forms.PasswordInput) 	  tipo password
+				forms.IntegerField()						 	  numero intero
+				forms.FloatField()	o forms.FloatField()     numero con virgola
+				forms.EmailField()										  email
+				forms.DateField(input_formats = ['%d/m/%y', '%d/m/%Y'])	   
+				forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
+				forms.DateTimeField(widget=forms.DateTimeInput
+										    (attrs={'type': 'datetime-local'}))
+				forms.DateTimeField(widget=forms.DateTimeInput
+										             (attrs={'type': 'month'}))
+				forms.DateTimeField(widget=forms.DateTimeInput
+										              (attrs={'type': 'time'}))
+				forms.DateTimeField(widget=forms.DateTimeInput
+													  (attrs={'type': 'week'}))
+				forms.CharField(widget=forms.URLField)			  indirizzi url
+
+CHECKBOX		forms.BooleanField()
+
+DROPDOWN LIST	forms.ChoiceField(choices=LISTA) dove l'argomento indica una lista
+				o una tupla contentente una coppia di stringhe valore+descrizione.
+
+LISTBOX			forms.MultipleChoiceField(choices=LISTA) come il dropdown list.
+
+RADIOBOX		forms.ChoiceField(choices=LISTA, widget=forms.RadioSelect) dunque
+				anche in questo caso si gestisce una lista di coppie di argomenti
+				e si usa il parametro widget per indicare il tipo di input.
+				
+TEXT AREA		forms.CharField(widget=forms.Textarea)  ancora si indica il tipo
+				CharField con indicazione del testo.
+
+HIDDEN			forms.CharField(widget=forms.HiddenInput, initial='valore')
+
+COLOR			-	type="color"
+
+RANGE			-	type="range"
+
+FILE			-	type="file"
+
+-------------------------------------------------------------------------------
+
+• SUBMIT
+
+• BUTTON
+
+• RESET
+
+
+
+
+A molti degli input dei tipi descritti, e a seconda della loro tipologia, si applicano i seguenti attributi:
+
+	id				identifica univocamente l'input da gestire
+	
+	placeholder		frase di uggerimento che compare sul campo prima dell'input
+	
+	name			nome del campo di input
+	
+	value			valore di default del campo
+
+	disabled		specifica che un campo deve essere disabilitato
+
+	max 			valore massimo di input
+
+	maxlength 		numero massimo di caratteri inseribili
+
+	min 			valore minimo di input
+
+	pattern 		espressione regolare con cui controllare il valore di input
+					
+	readonly 		specifica se il campo è di sola lettura (non modificabile)
+					
+	required 		specifica se un campo di input è obbligatorio 
+					
+	size 			larghezza (in caratteri) di un campo di input
+	
+	step 			intervalli numerici per un input numerico
+
+	checked			specifica che il checkbox o il ratiobox deve essere spuntato
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
