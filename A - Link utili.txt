@@ -9,7 +9,10 @@ Django 3.1 Tutorial
 
 Django 3.1 Builtins Tag Templates
 	https://docs.djangoproject.com/en/3.1/ref/templates/builtins/
-	
+
+Django 4.0 Form fields
+	https://docs.djangoproject.com/en/4.0/ref/forms/fields/
+
 W3 Schools - HTML ed altro
 	https://www.w3schools.com
 
@@ -18,3 +21,5 @@ Bootstrap
 
 File statici
 	https://www.youtube.com/watch?v=r93g0_v9zDc
+	
+	

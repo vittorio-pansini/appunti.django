@@ -286,6 +286,7 @@ Ogni volta che assegnamo una proprietà dentro la nostra classe, andiamo a crear
 
 Ora che abbiamo creato la classe FormUno() dobbiamo implementarla nella classe che gestisce la nostra view; quindi dobbiamo aprire il file di gestione views.py ed andiamo prima ad importare il nostro file dei form ...
 
+	from django.shortcuts import render
 	from . import forms_gestiti
 
 ... poi andiamo a creare una istanza di FormUno e ad usarla nella classe (o funzione) che gestisce la view ...
@@ -296,6 +297,8 @@ Ora che abbiamo creato la classe FormUno() dobbiamo implementarla nella classe c
 		return render(request, "mioForm.html", {"form": istanzaForm})
 
 Come si vede dal codice, viene creata l'istanza di FormUno che si chiama istanzaForm e viene passata al render della pagina di destinazione, che sarà presente fra i template col nome di "mioForm.html"; l'istanza è passata col nome di "form", semplicemente.
+
+La funzione form01 riceve il parametro "request", una parola chiave che include proprietà e metodi di HttpRequest e WSGIRequest, fra cui, come vedremo, abbiamo le proprietà request.GET e request.POST 
 
 Andiamo a creare l'url che ci serve in .../Hello/url.py come abbiamo già visto...
 
@@ -314,16 +317,33 @@ Andiamo a creare l'url che ci serve in .../Hello/url.py come abbiamo già visto.
 	<body>
 		<h1>Form di prova</h1>
 
-		<table>
+		<form method="POST" action="">
 
-			{{ form.as_table }}
+			{% csrf_token %}
 
-		</table>
+			<table>
+				{{ form.as_table }}
+			</table>
 
+			<div>
+				<button type="submit">Conferma</button>
+			</div> 
+
+		</form>
 	</body>
 	</html>
 
-In pratica quando Djagno va a renderizzare il form, va a creare automaticamente tutti gli input che abbiamo definito nella classe FormUno, nel punto esatto dove abbiamo inserito il costrutto  {{ form.as_table }} , fra i tag <table></table>.
+Il form è di tipo "POST" e con il parametro action impostato a "" indichiamo che l'azione è presente nello stesso form di appartenenza.
+
+
+Notiamo poi la presenza di un elemento speciale {% csrf_token %}. Questo elemento è un vero e proprio token che serve a Django per superare quello che viene definito come vulnerabilità di tipo "Cross Site Request Forgery".
+
+Il Cross-site request forgery, abbreviato CSRF (o anche XSRF), è una vulnerabilità a cui sono esposti i siti web dinamici quando sono progettati per ricevere richieste da un client senza controllare se la richiesta sia stata inviata intenzionalmente oppure no. In sintesi consente ad un intruso che controlla un sito malevolo di inviare richieste autenticate a nome della vittima, abusando così dei suoi privilegi presso un servizio online.
+
+Inserendo il token nel form, Django considererà il post generato dal form come attendibile ed accetterà il submit dell'utente; viceversa un submit da parte di un agente malevolo esterno (una web page che imita il nostro submit) che NON conterrà il token verrà automaticamente ignorato.
+
+
+Quando Djagno va a renderizzare il form, va a creare automaticamente tutti gli input che abbiamo definito nella classe FormUno, nel punto esatto dove abbiamo inserito il costrutto  {{ form.as_table }} , fra i tag <table></table>.
 
 Nel caso specifico notiamo che i campi sono completi di label e perfettamente incolonnati come su una tabella; questa è la modalità di default, ma possiamo avere altre modalità:
 
@@ -333,123 +353,90 @@ Nel caso specifico notiamo che i campi sono completi di label e perfettamente in
 
 Una volta completato tutto, avviando Django e raggiungendo la pagina che richiama il form notiamo che abbiamo ottenuto il risultato voluto.
 
-
 Ora chiudiamo il cerchio "traducendo" tutte le precedenti specifiche in quelle date dalla libreria dei form di Django:
 
--------------------------------------------------------------------------------------------------------------------------------
+	Elemento		Django Form library
+	-------------------------------------------------------------------------------
 
+	LABEL			La label viene generata automaticamente mettendo il nome della
+					variabile che viene assengata, oppure inserendo il parametro
+					label="..." alla proprietà durante l'assegnazione.
 
-Elemento		Django Form library
--------------------------------------------------------------------------------
+	TEXTBOX			forms.CharField()								  testo normale
+					forms.CharField(widget=forms.PasswordInput) 	  tipo password
+					forms.IntegerField()						 	  numero intero
+					forms.FloatField()	o forms.FloatField()     numero con virgola
+					forms.EmailField()										  email
+					forms.DateField(input_formats = ['%d/m/%y', '%d/m/%Y'])	   
+					forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
+					forms.DateTimeField(widget=forms.DateTimeInput
+												(attrs={'type': 'datetime-local'}))
+					forms.DateTimeField(widget=forms.DateTimeInput
+														 (attrs={'type': 'month'}))
+					forms.DateTimeField(widget=forms.DateTimeInput
+														  (attrs={'type': 'time'}))
+					forms.DateTimeField(widget=forms.DateTimeInput
+														  (attrs={'type': 'week'}))
+					forms.CharField(widget=forms.URLField)			  indirizzi url
 
-LABEL			La label viene generata automaticamente mettendo il nome della
-				variabile che viene assengata, oppure inserendo il parametro
-				label="..." alla proprietà durante l'assegnazione.
+	CHECKBOX		forms.BooleanField()
 
-TEXTBOX			forms.CharField()								  testo normale
-				forms.CharField(widget=forms.PasswordInput) 	  tipo password
-				forms.IntegerField()						 	  numero intero
-				forms.FloatField()	o forms.FloatField()     numero con virgola
-				forms.EmailField()										  email
-				forms.DateField(input_formats = ['%d/m/%y', '%d/m/%Y'])	   
-				forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
-				forms.DateTimeField(widget=forms.DateTimeInput
-										    (attrs={'type': 'datetime-local'}))
-				forms.DateTimeField(widget=forms.DateTimeInput
-										             (attrs={'type': 'month'}))
-				forms.DateTimeField(widget=forms.DateTimeInput
-										              (attrs={'type': 'time'}))
-				forms.DateTimeField(widget=forms.DateTimeInput
-													  (attrs={'type': 'week'}))
-				forms.CharField(widget=forms.URLField)			  indirizzi url
+	DROPDOWN LIST	forms.ChoiceField(choices=LISTA) dove l'argomento è una lista
+					o tupla contentente una coppia di stringhe valore+descrizione.
 
-CHECKBOX		forms.BooleanField()
+	LISTBOX			forms.MultipleChoiceField(choices=LISTA) come il dropdown list.
 
-DROPDOWN LIST	forms.ChoiceField(choices=LISTA) dove l'argomento indica una lista
-				o una tupla contentente una coppia di stringhe valore+descrizione.
-
-LISTBOX			forms.MultipleChoiceField(choices=LISTA) come il dropdown list.
-
-RADIOBOX		forms.ChoiceField(choices=LISTA, widget=forms.RadioSelect) dunque
-				anche in questo caso si gestisce una lista di coppie di argomenti
-				e si usa il parametro widget per indicare il tipo di input.
-				
-TEXT AREA		forms.CharField(widget=forms.Textarea)  ancora si indica il tipo
-				CharField con indicazione del testo.
-
-HIDDEN			forms.CharField(widget=forms.HiddenInput, initial='valore')
-
-COLOR			-	type="color"
-
-RANGE			-	type="range"
-
-FILE			-	type="file"
-
--------------------------------------------------------------------------------
-
-• SUBMIT
-
-• BUTTON
-
-• RESET
-
-
-
-
-A molti degli input dei tipi descritti, e a seconda della loro tipologia, si applicano i seguenti attributi:
-
-	id				identifica univocamente l'input da gestire
-	
-	placeholder		frase di uggerimento che compare sul campo prima dell'input
-	
-	name			nome del campo di input
-	
-	value			valore di default del campo
-
-	disabled		specifica che un campo deve essere disabilitato
-
-	max 			valore massimo di input
-
-	maxlength 		numero massimo di caratteri inseribili
-
-	min 			valore minimo di input
-
-	pattern 		espressione regolare con cui controllare il valore di input
+	RADIOBOX		forms.ChoiceField(choices=LISTA, widget=forms.RadioSelect) 
+					anche in questo caso si usa una lista di coppie di argomenti
+					e il parametro widget per indicare il tipo di input.
 					
-	readonly 		specifica se il campo è di sola lettura (non modificabile)
-					
-	required 		specifica se un campo di input è obbligatorio 
-					
-	size 			larghezza (in caratteri) di un campo di input
-	
-	step 			intervalli numerici per un input numerico
+	TEXT AREA		forms.CharField(widget=forms.Textarea)  si indica il tipo
+					CharField con indicazione del testo.
 
-	checked			specifica che il checkbox o il ratiobox deve essere spuntato
+	HIDDEN			forms.CharField(widget=forms.HiddenInput, initial='valore')
 
+	COLOR			-	type="color"
 
+	RANGE			-	type="range"
 
----------------------------------------------------------------------------------------------------------------------------------
+	FILE			-	type="file"
 
 
+Di seguito le specifiche degli attributi, che nel caso di Django Form Library vengono passati nelle parentesi di specifica del singolo campo.
 
+	id				id = '...'
+	placeholder		help_text = '...'
+	name			assunto il nome del campo
+	value			initial = '...'
+	disabled		disabled = True / False
+	max 			max_value = ...
+	maxlength 		max_length = ...
+	min 			min_value = ...
+	required 		required = True / False
+	checked			initial = True
 
-
-
-
-
-
-
-
-
-
-
-
+I tag submit, button e reset vanno inseriti a mano come già visto precedentemente nella pagina html.
 
 
 
 
 
 
+quando andiamo a creare la view
+
+
+Dato che AddPostView eredita da FormView una serie di proprietà e metodi già preconfezionati e che hanno valori e comportamenti già predeterminati, vale la pena di dare una attenta lettura della documentazione della libreria (usando ad esempio il citato su http://ccbv.co.uk).
+
+Andiamo a valorizzare alcune importante variabili:
+
+	template_name  al solito indica la pagina "fisica" che verrà gestita da Django 
+	               e che andremo a creare nel prossimo passaggio.
+
+	form_class     è la classe gestita dalla view, definita nel passaggio precedente 
+	               ed inserita fra gli import; in questo caso la classe PostForm.
+
+	success_url    è la pagina da aprire in caso di successo, nel nostro caso la 
+	               homepage, cioè "/".
 
 
 
@@ -465,12 +452,24 @@ A molti degli input dei tipi descritti, e a seconda della loro tipologia, si app
 
 
 
-Un esempio breve di form
-------------------------
 
-Con l'esempio che segue consentiremo all'utente di inserire un nuovo post che verrà pubblicato sulla home page, formato da un commento e da una immagine jpeg, caricata dall'esterno. Per ora ci accontenteremo di creare un form molto semplice.
 
-Per prima cosa creiamo un nuovo file in .../Hello/feed   che chiamiamo  form.py  e che conterrà il seguente codice:
+
+
+
+
+
+
+
+
+
+
+Caricamento di file
+-------------------
+
+Con l'esempio che segue consentiremo all'utente di inserire un nuovo post che verrà pubblicato sulla home page, formato da un commento e da una immagine jpeg, caricata dall'esterno.
+
+Se già non l'abbiamo creato, nel corso dell'esempio precedente, per prima cosa creiamo un nuovo file in .../Hello/feed   che chiamiamo  form.py  e che conterrà il seguente codice:
 
 	from django import forms
 	
@@ -478,9 +477,11 @@ Per prima cosa creiamo un nuovo file in .../Hello/feed   che chiamiamo  form.py 
 		text = forms.CharField()
 		image = forms.FileField()
 
-La classe PostForm() eredita la classe forms.Form e contiene due campi (fields), il primo è un testo di commento, il secondo è l'upload di un file.
+La classe PostForm() eredita la classe forms.Form e contiene due campi (fields), il primo è un testo di commento, il secondo è l'upload di un file. Aggiungiamo ora la nostra view operando sul file .../Hello/feed/views.py
 
-Aggiungiamo ora la nostra view operando sul file .../Hello/feed/views.py
+	...
+		path('addpost', feed.views.AddPostView, name='addpost'),
+	...
 
 Anche questa sarà una view basata sulle classi e per la precisione sulla classe FormView, che andiamo ad importare. Importeremo anche PostForm dal file locale forms.py che abbiamo appena creato.
 
@@ -501,18 +502,6 @@ Anche questa sarà una view basata sulle classi e per la precisione sulla classe
 		
 			return super().form_valid(form)
 
-Dato che AddPostView eredita da FormView una serie di proprietà e metodi già preconfezionati e che hanno valori e comportamenti già predeterminati, vale la pena di dare una attenta lettura della documentazione della libreria (usando ad esempio il citato su http://ccbv.co.uk).
-
-Andiamo a valorizzare alcune importante variabili:
-
-	template_name  al solito indica la pagina "fisica" che verrà gestita da Django 
-	               e che andremo a creare nel prossimo passaggio.
-
-	form_class     è la classe gestita dalla view, definita nel passaggio precedente 
-	               ed inserita fra gli import; in questo caso la classe PostForm.
-
-	success_url    è la pagina da aprire in caso di successo, nel nostro caso la 
-	               homepage, cioè "/".
 		
 Nella stessa classe andiamo a creare un metodo, ovvero a fare l'overload del metodo ereditato form_valid() ed in questo nostro metodo facciamo due cose: andiamo a creare un nuovo oggetto Post; usando un vecchio gergo, possiamo considerare il salvataggio di un nuovo record (l'oggetto) nella tabella Post (la classe).
 
@@ -521,7 +510,7 @@ Chiaramente la creazione di un oggetto Post comprende l'assegnazione alle propri
 Una volta creato l'oggetto, il form richiama la url tramite il metodo ereditato form_valid() che restituisce a sua volta un HttpResponse con l'URL da richiamare in caso di successo.
 
 
-Abbiamo bisogno di creare il file "new_post.html" che andremo, al solito, a posizionare nella cartella .../Hello/templates  e che conterrà fisicamente il form che verrà presentato all'utente. Anche stavolta ci appoggiamo al template di base.
+Ora andiamo a creare il file "new_post.html" da posizionare nella cartella .../Hello/templates  e che conterrà fisicamente il form che verrà presentato all'utente. Anche stavolta ci appoggiamo al template di base.
 
 	{% extends "base.html" %}
 
@@ -537,28 +526,11 @@ Abbiamo bisogno di creare il file "new_post.html" che andremo, al solito, a posi
 		</form>
 	{% endblock %}	
 
-Con HTML abbiamo costruito un sistema classico di gestione di un form di tipo "POST", con un bottone di conferma. 
-
 Il form di tipo "POST", lo ricordiamo, trasmette i dati all'interno della HTTP request, mentre l'altra opzione "GET" trasmette i dati attraverso la URL; è dunque chiaro che i dati di una immagine NON possono essere trasmessi attraverso una url: semplicemente tutti i dati non entrerebbero nella url.
-
-Con il parametro action impostato a "" indichiamo che l'azione è presente nello stesso form di appartenenza.
 
 Quello che conta è invece il parametro  enctype  che è impostato su "multipart/form-data" per consentire al form di codificare correttamente i dati binari delle immagini per poter poi essere elaborate dal form e, nel caso specifico, dal sistema di Django.
 
-Notiamo poi la presenza di un elemento speciale {% csrf_token %}. Questo elemento è un vero e proprio token che serve a Django per superare quello che viene definito come vulnerabilità di tipo "Cross Site Request Forgery".
-
-Il Cross-site request forgery, abbreviato CSRF (o anche XSRF), è una vulnerabilità a cui sono esposti i siti web dinamici quando sono progettati per ricevere richieste da un client senza controllare se la richiesta sia stata inviata intenzionalmente oppure no. In sintesi consente ad un intruso che controlla un sito malevolo di inviare richieste autenticate a nome della vittima, abusando così dei suoi privilegi presso un servizio online.
-
-Inserendo il token nel form, Django considererà il post generato dal form come attendibile ed accetterà il submit dell'utente; viceversa un submit da parte di un agente malevolo esterno (una web page che imita il nostro submit) che NON conterrà il token verrà automaticamente ignorato.
-
-Subito dopo il token troviamo il tag personalizzato che fa riferimento all'oggetto form, che troviamo nella documentazione di FormView, alla descrizione del metodo get_context_data() che a sua volta richiama get_form() e dunque, senza complicarci la vita, possiamo usare "form" come elemento da usare nel tag.
-
-L'oggetto form ha diversi metodi che velocizzano la gestione dell'aspetto, ad esempio  form.as_ul  mostra tutti gli input come lista puntata,  form.as_p mostra ciascun input su paragrafi separati, form.as_table in modalità tabella; abbiamo scelto as_p per maggiore pulizia d'aspetto. 
-
-Verranno visualizzate anche delle label di default, di cui non ci occupiamo per ora.
-
-Infine in una zona "div" andremo ad inserire un pulsante di "submit" in stile HTML.
-
+Subito dopo il token troviamo il tag personalizzato che fa riferimento all'oggetto form, che troviamo nella documentazione di FormView, alla descrizione del metodo get_context_data() che a sua volta richiama get_form() e dunque, senza complicarci la vita, possiamo usare "form" come elemento da usare nel tag, mostrato questa volta in forma di paragrafo (.as_p).
 
 Dobbiamo ora inserire la nostra pagina fra le url operative della App feed.  Apriamo quindi .../Hello/feed/urls.py ed aggiungiamo la url della nostra nuova pagina, dove andiamo ad usare la classe AddPostView(), dopo averla opportunamente importata.
 
@@ -670,24 +642,4 @@ Il blocco è costituito da un  {% if message %} ... {% endif %}  che attiva un c
 	</body>
 	
 	</html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
