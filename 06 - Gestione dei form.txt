@@ -284,75 +284,6 @@ La definizione avviene tramite assengazione ad una proprietà della classe della
 
 Ogni volta che assegnamo una proprietà dentro la nostra classe, andiamo a creare un campo esattamente come se lo scrivessimo in html, solo in modo più semplice e gestendo il nostro form come un oggetto.
 
-Ora che abbiamo creato la classe FormUno() dobbiamo implementarla nella classe che gestisce la nostra view; quindi dobbiamo aprire il file di gestione views.py ed andiamo prima ad importare il nostro file dei form ...
-
-	from django.shortcuts import render
-	from . import forms_gestiti
-
-... poi andiamo a creare una istanza di FormUno e ad usarla nella classe (o funzione) che gestisce la view ...
-
-	def form01(request):
-
-		istanzaForm = forms_gestiti.FormUno()
-		return render(request, "mioForm.html", {"form": istanzaForm})
-
-Come si vede dal codice, viene creata l'istanza di FormUno che si chiama istanzaForm e viene passata al render della pagina di destinazione, che sarà presente fra i template col nome di "mioForm.html"; l'istanza è passata col nome di "form", semplicemente.
-
-La funzione form01 riceve il parametro "request", una parola chiave che include proprietà e metodi di HttpRequest e WSGIRequest, fra cui, come vedremo, abbiamo le proprietà request.GET e request.POST 
-
-Andiamo a creare l'url che ci serve in .../Hello/url.py come abbiamo già visto...
-
-	...
-		path('form01', feed.views.form01, name='form01'),
-	...
-
-... ed infine andiamo a creare l'html template di destinazione .../Hello/templates/mioForm.html che avrà un aspetto molto semplice:
-
-	<!DOCTYPE html>
-	<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<title>Form di prova</title>
-	</head>
-	<body>
-		<h1>Form di prova</h1>
-
-		<form method="POST" action="">
-
-			{% csrf_token %}
-
-			<table>
-				{{ form.as_table }}
-			</table>
-
-			<div>
-				<button type="submit">Conferma</button>
-			</div> 
-
-		</form>
-	</body>
-	</html>
-
-Il form è di tipo "POST" e con il parametro action impostato a "" indichiamo che l'azione è presente nello stesso form di appartenenza.
-
-
-Notiamo poi la presenza di un elemento speciale {% csrf_token %}. Questo elemento è un vero e proprio token che serve a Django per superare quello che viene definito come vulnerabilità di tipo "Cross Site Request Forgery".
-
-Il Cross-site request forgery, abbreviato CSRF (o anche XSRF), è una vulnerabilità a cui sono esposti i siti web dinamici quando sono progettati per ricevere richieste da un client senza controllare se la richiesta sia stata inviata intenzionalmente oppure no. In sintesi consente ad un intruso che controlla un sito malevolo di inviare richieste autenticate a nome della vittima, abusando così dei suoi privilegi presso un servizio online.
-
-Inserendo il token nel form, Django considererà il post generato dal form come attendibile ed accetterà il submit dell'utente; viceversa un submit da parte di un agente malevolo esterno (una web page che imita il nostro submit) che NON conterrà il token verrà automaticamente ignorato.
-
-
-Quando Djagno va a renderizzare il form, va a creare automaticamente tutti gli input che abbiamo definito nella classe FormUno, nel punto esatto dove abbiamo inserito il costrutto  {{ form.as_table }} , fra i tag <table></table>.
-
-Nel caso specifico notiamo che i campi sono completi di label e perfettamente incolonnati come su una tabella; questa è la modalità di default, ma possiamo avere altre modalità:
-
-	{{ ###.as_ul }} 	costruisce una struttura puntata fra i tag <ul></ul>.
-	
-	{{ ###.as_p }} 		costruisce una struttura a paragrafi, senza tag.
-
-Una volta completato tutto, avviando Django e raggiungendo la pagina che richiama il form notiamo che abbiamo ottenuto il risultato voluto.
-
 Ora chiudiamo il cerchio "traducendo" tutte le precedenti specifiche in quelle date dalla libreria dei form di Django:
 
 	Elemento		Django Form library
@@ -395,12 +326,15 @@ Ora chiudiamo il cerchio "traducendo" tutte le precedenti specifiche in quelle d
 
 	HIDDEN			forms.CharField(widget=forms.HiddenInput, initial='valore')
 
-	COLOR			-	type="color"
+	COLOR			forms.IntegerField(widget=forms.DateInput
+													(attrs={'type': 'color'}))
 
-	RANGE			-	type="range"
+	RANGE			forms.IntegerField(widget=forms.DateInput
+						  (attrs={'type': 'range', 'min': '...', 'max': '...'}))
 
-	FILE			-	type="file"
+	FILE			forms.FileField()
 
+Si noti che, ove non previsto da Django, è possibile forzare l'impostazione di attributi di input attraverso la proprietà forms.DateInput().
 
 Di seguito le specifiche degli attributi, che nel caso di Django Form Library vengono passati nelle parentesi di specifica del singolo campo.
 
@@ -415,19 +349,289 @@ Di seguito le specifiche degli attributi, che nel caso di Django Form Library ve
 	required 		required = True / False
 	checked			initial = True
 
-I tag submit, button e reset vanno inseriti a mano come già visto precedentemente nella pagina html.
+I tag submit, button e reset vanno inseriti a parte, esplicitamente, come già visto precedentemente nella pagina html.
+
+Ora che abbiamo creato la classe FormUno() dobbiamo implementarla nella funzione che gestisce la nostra view; ecco di seguito il codice che commentiamo dopo:
+
+	from django.shortcuts import render
+	from .forms_gestiti import FormUno
+	.......
+
+	def form01(request):
+		istanzaForm = FormUno()
+		for name in request.POST:
+			print("{}: {}".format(name, request.POST.getlist(name)))
+		return render(request, "mioForm.html", {"form": istanzaForm, "metodo": request.method})
+
+Come detto, è possibile gestire la view come funzione o come classe; per ora ci limiteremo a gestire la view attraverso una semplice funzione, in uno dei prossimi esempi vedremo l'implementazione attraverso la classe.
+
+Dopo aver importato la libreria  render  di Django, agganciamo la classe FormUno importandola da forms_gestiti.py; in questo caso importiamo direttamente la classe FormUno, ma se vogliamo rendere l'import generico possiamo scrivere "from . import forms_gestiti", ricordandoci poi di richiamare la classe come forms_gestiti.FormUno del nostro esempio.
+
+Nella funzione form01 andiamo ad implementare un oggetto di tipo request che andremo poi ad usare nella renderizzazione; il parametro "request" è una parola chiave che include proprietà e metodi di HttpRequest e WSGIRequest, fra cui, come vedremo, abbiamo le proprietà request.GET e request.POST 
+
+L'istanza di FormUno, cioè istanzaForm verrà passata al template mioForm, attraverso la variabile oggetto che abbiamo chiamato semplicemente "form"; insieme all'oggetto form, il render passa anche una ulteriore variabile che è il metodo con cui è stata richiamata la pagina, e che andremo a scrivere in cima al corpo della pagina web: ci servirà come debug in seguito.
+
+Infine, può essere utile a livello di debug interrogare i risultati di un post, leggendone i valori; le due righe che fomano il ciclo for stampano nella console i valori che Django acquisisce in input dopo aver confermato il form.
+
+Quello illustrato qui sopra è il metodo di lettura tramite la funzione getlist(), ma esiste un sistema più elegante, che è quello di interrogare gli items dell'insieme detto  cleaned_data  del form cioè i dati che Django ha già trasformato nelle primitive Python:
+
+		for nome, valore in istanzaForm.cleaned_data.items():
+			print ("{}: ({})  {}".format(nome, type(valore), valore))
+
+Andiamo a creare l'url che ci serve in .../Hello/url.py come abbiamo già visto...
+
+	...
+		path('form01', feed.views.form01, name='form01'),
+	...
+
+... ed infine andiamo a creare l'html template di destinazione .../Hello/templates/mioForm.html che avrà un aspetto molto semplice:
+
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<title>Form di prova</title>
+	</head>
+	<body>
+		<h1>Form di prova</h1>
+		<h4>Metodo:  {{metodo}}</h4>
+		<form method="POST" action="">
+			{% csrf_token %}
+
+			<table>
+				{{ form.as_table }}
+			</table>
+
+			<div>
+				<button type="submit">Conferma</button>
+			</div> 
+
+		</form>
+	</body>
+	</html>
+
+Si noti che nell'intestazione del tag <form> il parametro action="" indica che la conferma porterà a restare nella stessa pagina.
+
+Notiamo poi la presenza di un elemento speciale {% csrf_token %}. Questo elemento è un vero e proprio token che serve a Django per superare quello che viene definito come vulnerabilità di tipo "Cross Site Request Forgery".
+
+Il Cross-site request forgery, abbreviato CSRF (o anche XSRF), è una vulnerabilità a cui sono esposti i siti web dinamici quando sono progettati per ricevere richieste da un client senza controllare se la richiesta sia stata inviata intenzionalmente oppure no. In sintesi consente ad un intruso che controlla un sito malevolo di inviare richieste autenticate a nome della vittima, abusando così dei suoi privilegi presso un servizio online.
+
+Inserendo il token nel form, Django considererà il post generato dal form come attendibile ed accetterà il submit dell'utente; viceversa un submit da parte di un agente malevolo esterno (una web page che imita il nostro submit) che NON conterrà il token verrà automaticamente ignorato.
+
+Quando Djagno va a renderizzare il form, va a creare automaticamente tutti gli input che abbiamo definito nella classe FormUno, nel punto esatto dove abbiamo inserito il costrutto  {{ form.as_table }} , fra i tag <table></table>.
+
+Nel caso specifico notiamo che i campi sono completi di label e perfettamente incolonnati come su una tabella; questa è la modalità di default, ma possiamo avere altre modalità, riepilogando:
+
+	{{ ###.as_table }}  struttura come tabella fra i tag <table> </table>.
+ 
+	{{ ###.as_ul }} 	struttura come elenco puntato fra i tag <ul> </ul>.
+	
+	{{ ###.as_p }} 		struttura a paragrafi, senza tag.
+
+Una volta completato tutto, avviando Django e raggiungendo la pagina che richiama il form notiamo che abbiamo ottenuto il risultato voluto e, nella console, verranno stampati i nomi dei vari campi gestiti con i relativi valori.
+
+
+
+Validazione dei form e lettura dei valori
+-----------------------------------------
+
+Parliamo anzitutto della differenza che c'è fra un form di tipo "bound" da uno di tipo "unbound", che indicano rispettivamente che un form può essere chiamato o meno inviando dati di tipo POST per la validazione.
+
+Il form di tipo  unbound  vengono quindi istanziati senza argomenti, ad esempio:
+
+	form = ExampleForm()
+
+Viceversa quelli di tipo  bound  ricevono dei dati che vengono usati per la validazione, come ad esempio dati POST:
+
+	form = ExampleForm(request.POST)
+
+Uno dei vantaggi che ci danno i form di tipo bound è la possibilità di personalizzare la validazione dei singoli campi, cioè costruire delle regole personalizzate, che vengono poi acquisite dal browser.
+
+Un altro vantaggio è la capacità della libreria di trasformare i dati nelle primitive Python (stringhe, numeri interi, eccetera) attraverso l'attributo  cleaned_data  che vedremo oltre.
+
+Grazia a request.method possiamo differenziare il comportamento della nostra funzione:
+
+	if request.method == "POST":
+		form = ExampleForm(request.POST)
+		.....
+	else:	# "GET"
+		form = ExampleForm()
+		.....
+
+All'interno del blocco "POST" possiamo poi testare la validità o meno del form ...
+
+		form = ...
+		if form.is_valid():
+			.....
+		else:		# is_invalid()
+			.....
+
+Un codice completo della nostra funzione form01 risulta essere il seguente:
+
+	def form01(request):
+
+		if request.method == "POST":
+			istanzaForm = FormUno(request.POST)
+			if istanzaForm.is_valid():
+				for nome, valore in istanzaForm.cleaned_data.items():
+					print("{}: ({})  {}".format(nome, type(valore), valore))
+		else:   # GET
+			istanzaForm = FormUno()
+		return render(request, "mioForm.html", 
+				{"form": istanzaForm, "metodo": request.method})
+
+
+
+Validazione personalizzata
+--------------------------
+
+I browser eseguono una validazione in base al tipo di input che abbiamo definito e ai parametri che sono stati aggiunti ad esso, ad esempio minimo/massimo valore o obbligatorietà.
+
+E' tuttavia possibile, come accennato inizialmente, fare in modo da istruire il browser alla validazione automatica di un form in base a delle regole su un singolo input o più di un input.
+
+Il primo passo è costruire una funzione che esegua il controllo personalizzato su un valore che viene passato come parametro e questa funzione deve essere presente nel file python che contiene le classi dei form utilizzate oppure essere importato da un altro file.
+
+Il codice sintetico di esempio che vediamo successivamente, genera la mancata validazione del campo se "valore" non contiene tutte le lettere minuscole e causa la mancata validazione del form :
+
+	from django.core.exceptions import ValidationError
+
+	def deve_essere_lowercase(valore):
+		if valore.lower() != valore:
+			raise ValidationError("{} non è in formato minuscolo.".format(valore))
+
+A questo punto andiamo ad inserire un campo di prova nella classe FormUno:
+
+	.....
+	lettere_minuscole = forms.CharField(validators=[deve_essere_lowercase])
+
+Perchè il nostro esempio funzioni, è necessario che sia stata creata la struttura al termine del paragrafo precedente.
+
+
+Un altro sistema per la validazione dei campi è quello di sfruttare il metodo  clean  che viene generato su ciascun campo della classe, in modo automatico da Django: se abbiamo creato i campi "nome_utente" e "password" verranno creati automaticamente "clean_nome_utente" e "clean_password".
+
+Volendo riscrivere l'esempio precedente, possiamo fare in modo che il codice di controllo di lettere_minuscole sia incluso all'interno del codice stesso della classe FormUno, come segue, rimuovendo la generalità di deve_essere_lowercase():
+
+	class FormUno(forms.Form):
+		......
+		lettere_minuscole = forms.CharField()
+
+		def clean_lettere_minuscole(self):
+			valore = self.cleaned_data['lettere_minuscole']
+			if valore.lower() != valore:
+				raise ValidationError("{} non è in formato minuscolo.".format(valore))
+			return valore
+
+Possiamo anche sfruttare il fatto che la funzione torni un valore e quindi fare in modo che sia forzato lo stesso:
+
+	........
+		def clean_lettere_minuscole(self):
+			valore = self.cleaned_data['lettere_minuscole']
+			return valore.lower()
+
+
+La validazione di un campo può essere legata alla condizione e/o al valore di altri campi e può essere gestita attraverso il metodo clean che abbiamo usato nell'esempio precedente.
+
+Nell'esempio che segue andremo ad inserire due campi una checkbox che indica che l'utente vuole iscriversi ad una newsletter e il relativo campo della mail che diventa obbligatorio solo nel caso in cui la checkbox sia spuntata.
+
+	class FormDue(forms.Form):
+		iscritto = forms.BooleanField(label="Newsletter", required=False)
+		email_newsletter = forms.EmailField(label="Email utente", required=False)
+
+		def clean(self):
+			clean_data = super().clean()
+			if clean_data["iscritto"] and not clean_data.get("email_newsletter"):
+				self.add_error("email_newsletter", 
+	                           "Se chiedi di essere iscritto alla newsletter "
+							   "devi indicare la tua mail.")
+
+Ricordiamoci di importare FormDue nel file view.py e sostituire le istanze di FormUno in FormDue in form01().
+
+Abbiamo fatto l'override del metodo clean() della classe Form che viene chiamata per validare l'intero form; qui abbiamo inserito il nostro codice di controllo così come descritto precedentemente.
+
+Il metodo  add_error()  mostrerà un messaggio nei pressi del campo indicato; se si vuole mostrare il messaggio nella parte superiore del corpo del form, il primo parametro deve essere impostato a None:
+
+				self.add_error(None, .....
+
+
+
+Creazione automatica dei form attraverso ModelForm
+--------------------------------------------------
+
+Così come visto finora, la classica gestione CRUD dovrebbe passare attraverso la gestione manuale dai form al database, tramite la raccolta dei dati che provengono da questi ultimi e la scrittura manuale degli stessi nei vari campi. 
+
+La lettura e scrittura manuale è meglio descritta nel capitolo dedicato ai database ed è sempre possibile applicarlo, tuttavia l'approccio manuale è sconsigliabile, dato che possono conseguire errori anche importanti, come accade in altri linguaggi e framework.
+
+In Django è possibile partire da una struttura dati, partendo dalla loro struttura, definita in forma di classi nel file models.py e facendo in modo che detta struttura sia automaticamente trasformata in form di input.
+
+Nel prossimo esempio assumeremo di aver già creato una tabella nel database MySQL Agenziaweb, una tabella che si chiama agenziaweb_visite, che è costituita da 5 campi di cui uno è il codice id.
+
+	from .models import AgenziawebVisite
+	......
+	class FormVisite(forms.ModelForm):
+		class Meta:
+			model = AgenziawebVisite
+			# fields = ("codice_cliente", "data_visita", 
+			#			"codice_agente", "esito_visita")
+			fields = "__all__"
+
+Abbiamo importato la classe relativa ad agenziaweb_visite ed abbiamo creato la classe FormVisite() che eredita da ModelForm.
+
+All'interno della nostra classe FormVisite() andiamo a creare un attributo che è definito a sua volta sotto forma di classe che chiamiamo  Meta  e che contiene il modello cui ci riferiamo, in questo caso la classe AgenziawebVisite() e i campi che vanno gestiti, che possiamo indicare assegnando a  fields  una lista oppure la parola chiave "__all__" che include tutti i campi definiti nel modello.
+
+Andiamo ora ad operare nel solito file view.py ....
+
+	......
+	from django.shortcuts import render, get_object_or_404, redirect
+	from django.contrib import messages
+	from .forms_gestiti import  ....,  FormVisite
+	......
 
 
 
 
 
 
-quando andiamo a creare la view
+
+Abbiamo importato get_object_or_404 e redirect che servono ......    e messages che ci aiutano a mostrare delle messagebox utili nella fase di feedback all'utente.
 
 
-Dato che AddPostView eredita da FormView una serie di proprietà e metodi già preconfezionati e che hanno valori e comportamenti già predeterminati, vale la pena di dare una attenta lettura della documentazione della libreria (usando ad esempio il citato su http://ccbv.co.uk).
 
-Andiamo a valorizzare alcune importante variabili:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===============================================================================
+
+Come al solito il tutto va gestito con le classi quindi accertiamoci di aver commentato "from django.shortcuts import render" e di aver già implementato "TemplateView", quindi aggiungiamo la libreria che gestisce i form quindi FormView.
+
+Dato che form01 eredita da FormView una serie di proprietà e metodi già preconfezionati e che hanno valori e comportamenti già predeterminati (vds. http://ccbv.co.uk) e di cui si va a fare l'override.
+
+Nello specifico andiamo a valorizzare alcune proprietà che sono:
 
 	template_name  al solito indica la pagina "fisica" che verrà gestita da Django 
 	               e che andremo a creare nel prossimo passaggio.
@@ -435,16 +639,14 @@ Andiamo a valorizzare alcune importante variabili:
 	form_class     è la classe gestita dalla view, definita nel passaggio precedente 
 	               ed inserita fra gli import; in questo caso la classe PostForm.
 
-	success_url    è la pagina da aprire in caso di successo, nel nostro caso la 
-	               homepage, cioè "/".
+	success_url    è la pagina da aprire in caso di successo, nel nostro caso "" 
+	               indica di restare nella stessa pagina.
 
+Subito sotto abbiamo l'override del metodo  form_valid(self, form)  dove la variabile form rappresenta proprio l'oggetto che andremo poi a gestire all'interno del template e che viene invocato nel momento in cui il nostro form viene validato dal browser.
 
+Viceversa esiste un altro metodo  form_invalid(self, form)  invocato in caso di insuccesso.
 
-
-
-
-
-
+Facendo l'override, possiamo fare in modo da includere alcune operazioni, per ora ci limitiamo, come si vede, ad assegnare i vari campi definiti nel form a delle variabili.
 
 
 
