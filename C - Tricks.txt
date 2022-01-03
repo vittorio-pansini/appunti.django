@@ -1,4 +1,7 @@
-
+**********************************
+ Appendice C - Tricks
+			   [0.2.0]
+*********************************
 
 
 Rimuovere l'errore dell'icona mancante
@@ -15,5 +18,35 @@ Per risolvere l'anomalia e far comparire una icona personalizzata della pagina, 
 	<link rel="icon" href="{% static 'mioLogo.svg' %}">
 
 ... che fa riferimento ad una immagine mioLogo.svg gestita nel percorso statico.
+
+
+
+Superare l'errore "1048 last_login cannot be null" in MySQL
+-----------------------------------------------------------
+
+Durante la creazione di un utente administrator può verificarsi il seguente errore:
+
+	django.db.utils.IntegrityError: (1048, "Column 'last_login' cannot be null")
+
+... e la conseguente NON creazione dell'utente administrator.
+
+Per risolvere il problema bisogna operare alcune operazioni manuali; per prima cosa in MySQL contolliamo il contenuto di django_migrations:
+
+	mysql> USE miodatabase;
+	mysql> SELECT * FROM django_migrations;
+
+Se troviamo dentro dei record, allora cancelliamoli:
+
+	mysql> TRUNCATE TABLE django_migrations;
+
+Lasciamo il terminale di MySQL e rilanciamo le migrazioni in Django:
+
+	$ python manage.py migrate --fake-initial
+
+... ed accertiamoci che compaia il messaggio:
+
+	0005_alter_user_last_login_null - [OK]
+
+Se vediamo altri conflitti, è corretto perchè abbiamo bisogno di fare solo questa migrazione.
 
 
