@@ -584,33 +584,51 @@ Andiamo ora ad operare nel solito file view.py ....
 	from django.shortcuts import render, get_object_or_404, redirect
 	from django.contrib import messages
 	from .forms_gestiti import  ....,  FormVisite
+	from .models import AgenziawebVisite
 	......
 
+Abbiamo importato get_object_or_404 e redirect che servono a gestire le chiamate del form e messages che ci aiutano a mostrare delle messagebox utili nella fase di feedback all'utente; non ultimo il modello da manipolare all'interno del form (nel nostro caso AgenziawebVisite) perchè dobbiamo avere la possibilità di leggere o scrivere i dati dal suo interno.
+
+In particolare get_object_or_404() chiama get() su un determinato gestore di modello, ma solleva Http404 invece dell'eccezione DoesNotExist del modello, in sostanza si sostituisce al costrutto try...except.
+
+Andiamo poi a creare la funziona form_visite() che riportiamo di seguito:
+
+	def form_visite(request, pk=None):
+
+		if pk is not None and pk != 0:
+			visita = get_object_or_404(AgenziawebVisite, pk=pk)
+		else:
+			visita = None
+
+		if request.method == "POST":
+			form = FormVisite(request.POST, instance=visita)
+			if form.is_valid():
+				update_visite = form.save()
+				if visita is None:
+					messages.success(request, "Nuova visita salvata")
+				else:
+					messages.success(request, "Modifiche alla visita salvate")
+				return redirect("visite_edit", update_visite.pk)
+		else:
+			# metodo GET
+			form = FormVisite(instance=visita)
+
+		return render(request, "mioForm.html", 
+						{"form": form, "metodo": request.method})
 
 
+Questa funzione va a gestire il form sia in modalità GET che in modalità POST e per maggiore chiarezza infatti andiamo a riportare le due chiamate che bisogna anche aggiungere a urls.py fra i patterns...
 
+    path('visite/<int:pk>/', agenziaweb.views.form_visite, name='visite_edit'),
+    path('visite/new/', agenziaweb.views.form_visite, name='visite_new'),
 
+... che in sostanza chiamano la stessa funzione ma in modo differente, la prima con il parametro pk la seconda senza; se il nostro applicativo o l'utente fornisce un URL del tipo http://127.0.0.1:8000/visite/new/ allora la funzione si attiverà in modalità POST e sarà pronta a ricevere un nuovo record della tabella Visite, viceversa una chiamata del tipo http://127.0.0.1:8000/visite/3/ chiederà alla funzione di mostrare il record con id=3, in modalità GET, cioè la classica modalità "edit" di un record esistente.
 
+La funzine form_visite riceve un parametro aggiuntivo, pk che se nullo o zero indica che si tratta di un nuovo record, quindi va in modalità POST e va a gestire la validità del form stesso (blocco is_valid).
 
-Abbiamo importato get_object_or_404 e redirect che servono ......    e messages che ci aiutano a mostrare delle messagebox utili nella fase di feedback all'utente.
+Nel caso di input valido al termine la funzione richiama se stessa in modalità GET passando il parametro update_visite.pk ovvero l'id del record appena salvato dal form (e il resto della funzione non viene eseguito).
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Il secondo blocco gestisce il metodo GET semplicemente creando una istanza di FormVisite() che verrà passata al successivo render.
 
 
 
