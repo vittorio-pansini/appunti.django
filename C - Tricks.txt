@@ -15,10 +15,23 @@ Se all'avvio compare l'errore ...
 
 Per risolvere l'anomalia e far comparire una icona personalizzata della pagina, inserire nella sezione <head>, subito prima del titolo un'istruzione come nell'esempio che segue:
 
-	<link rel="icon" href="{% static 'mioLogo.svg' %}">
+	<link rel="icon" href="{% static 'img/mioLogo.svg' %}">
 
 ... che fa riferimento ad una immagine mioLogo.svg gestita nel percorso statico.
 
+Tuttavia un metodo ancora più efficace è quello di inserire il favicon fra le url del progetto.
+
+Diamo per assunto che i file statici sinao stati configurati correttamente; andiamo ad aggiungere il seguente codice al file url.py della root:
+
+	.....
+	from django.contrib.staticfiles.storage import staticfiles_storage
+	from django.views.generic.base import RedirectView
+
+	urlpatterns = [ .....,
+		 path('favicon.ico', RedirectView.as_view(url=staticfiles_storage.url('img/mioLogo.svg'))),
+		 ......	]
+
+In questo modo andiamo a risolvere la richiesta dei browser di avere il favicon.ico
 
 
 Superare l'errore "1048 last_login cannot be null" in MySQL
