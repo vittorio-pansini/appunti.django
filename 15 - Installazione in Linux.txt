@@ -1,0 +1,259 @@
+**********************************
+ 15 - Installazione in Linux
+      [0.0.1]
+**********************************
+
+Finora, abbiamo utilizzato il server di sviluppo Django per entrambi eseguire il codice Python e servire i file statici e multimediali, mentre in realtà ricordiamo che il server di sviluppo Django non è adatto per l'uso in produzione, non è progettato per eseguire più processi o gestire molti utenti, ma soprattutto, non viene eseguito
+quando l'impostazione DEBUG è impostata su True.
+
+Inizieremo questo capitolo esaminando l'architettura utilizzata in un web di produzione server, ovvero dove le funzioni del server di sviluppo Django vengono suddivise e gestite da DUE diverse applicazioni:
+
+	- Un frontend web server  (ad esempio, NGINX, lighthttpd, o Apache), che riceve la richiesta dal browser.
+	
+	- Un application server   (ad esempio, Gunicorn o uWSGI), che esegue il codice Python.
+	
+Il frontend web server decide come deve essere gestita la richiesta; se è una richiesta per un file statico o multimediale, il frontend web server può gestire la richiesta stessa, cioè può semplicemente leggere e inviare il file.
+
+Se la richiesta è per codice specifico di Python, dovrà essere inoltrata al server application per la sua gestione; l'applicazione Django viene quindi fa il parse dell'URL e altri dati HTTP, genera un oggetto HttpRequest utilizzando una vista e invia la risposta al frontend web server, che a sua volta ritrasmette la risposta al browser.
+
+		+-----------+
+		|  browser  |
+		+-----------+
+			  ^
+			  |  HttpRequest
+			  v
+		+------------+					 +---------------+
+		|  Frontend  |		request		 |  Application  |
+		| web server |<---- dynamic ---->|    Server	 |
+		|   (NGINX)  |      content		 |  (GUNICORN)   |
+		+------------+	    			 +---------------+
+
+Come si vede in figura nell'applicazione di questo capitolo adotteremo NGINX e GUNICORN rispettivamente come frontend web server e application server.
+
+Gunicorn utilizza un protocollo speciale per mettere in comunicazione gli script Python con l'application server che si chiama WSGI (Web Server Gateway Interface - si legge wizz-gee).
+
+Assumeremo di aver installato e configurato correttamente un server linux per la precisione Linux Ubuntu Server, raggiungibile tramite client SSH (quello di Windows 10 oppure Putty) e un sistema di trasferimento di file ftp come FileZilla.
+
+Per prima cosa accertiamoci di aver eseguito un buon aggiornamento del sistema:
+
+	$ sudo apt update
+	.......
+	$ sudo apt upgrade
+	.......
+
+Una cosa importante: si presume che NON sia installato sullo stesso sistema anche Apache; in caso contrario va rimosso perchè va in conflitto con nginx e non funziona niente. Se c'è andiamo a rimuoverlo con 
+	
+	$ sudo apt remove apache2
+	$ sudo apt purge apache2
+	$ sudo apt autoremove
+	.......
+
+Siamo pronti per installare i seguenti pacchetti ...
+
+	nginx 					il frontend web server
+	
+	python3-virtualenv 		virtualenv applicato a Python3
+	
+	build-essential 		è un pacchetto che contiene riferimenti a numerosi
+							altri pacchetti necessari per la creazione di 
+							software in generale; installa altri pacchetti 
+							come g ++ e gcc: i compilatori GNU C e C ++.
+							
+	python3-dev				python-dev contiene i file di intestazione 
+							necessari per creare estensioni Python. Su Linux le
+							librerie binarie e i file header di pacchetti come
+							python sono separati. Quindi quando si vogliono 
+							creare estensioni è necessario installare il 
+							pacchetto dev corrispondente.
+
+... cui possiamo aggiungere quelli di MySQL ...
+
+	mysql-sever				DBMS MySQL
+
+... e quelli, eventualmente, di PostgreSQL ...
+
+	postgresql 				DBMS PostgreSQL
+
+	libpq-dev 				file header e libreria statica per compilare 
+							programmi C che si linkano con la libreria libpq e
+							comunicare con un backend per database PostgreSQL.
+	
+... con i comandi (a seconda della configurazione che si vuole ottenere) ...
+
+	$ sudo apt install nginx python3-virtualenv build-essential python3-dev
+
+	$ sudo apt install postgresql libpq-dev
+
+	$ sudo apt install mysql-sever
+
+
+Configurazione di nginx
+-----------------------
+
+Dopo aver installato nginx questo dovrebbe essere attivo, tuttavia, per prima cosa, dobbiamo fare in modo che il nostro firewall vale a dire UFW (la procedura di installazione è descritta negli appunti di Linux Server) sia attivo e che insieme all'accesso alle porte 22 (SSH), 3306 (MySQL) e 21 (FileZilla) consenta l'accesso anche a nginx. Controlliamo lo stato...
+
+	$ sudo ufw status
+
+Otterremo qualcosa del tipo...
+
+	Status: active
+
+	To                         Action      From
+	--                         ------      ----
+	22                         ALLOW       Anywhere
+	21                         ALLOW       Anywhere
+	3306                       ALLOW       Anywhere
+	22 (v6)                    ALLOW       Anywhere (v6)
+	21 (v6)                    ALLOW       Anywhere (v6)
+	3306 (v6)                  ALLOW       Anywhere (v6)
+
+Dobbiamo aggiungere anche nginx allora leggiamo le applicazioni "papabili" con:
+
+	$ sudo ufw app list
+
+... ottenendo ...
+
+	Available applications:
+	  Nginx Full
+	  Nginx HTTP
+	  Nginx HTTPS
+	  OpenSSH
+	  Samba
+
+Dobbiamo aggiungere 'Nginx HTTP' e/o 'Nginx HTTPS' con i comandi...
+
+	$ sudo ufw allow 'Nginx HTTP'
+	$ sudo ufw allow 'Nginx HTTPS'
+
+Ora che il firewall non impedisce più l'accesso al nostro sistema, controlliamo che il servizio nginx funzioni con ...
+
+	$ systemctl status nginx.service
+	
+Dovrebbe apparire ...
+	
+	● nginx.service - A high performance web server and a reverse proxy server
+		 Loaded: loaded (/lib/systemd/system/nginx.service; enabled; vendor preset: enabled)
+		 Active: active (running) since Mon 2022-01-10 19:07:27 UTC; 40min ago
+		   Docs: man:nginx(8)
+	   Main PID: 1827 (nginx)
+		  Tasks: 5 (limit: 4435)
+		 CGroup: /system.slice/nginx.service
+				 ├─1827 nginx: master process /usr/sbin/nginx -g daemon on; master_process on;
+				 ├─1828 nginx: worker process
+				 ├─1829 nginx: worker process
+				 ├─1830 nginx: worker process
+				 └─1831 nginx: worker process
+
+	Jan 10 19:07:25 ubuntu systemd[1]: Starting A high performance web server and a reverse proxy server...
+	Jan 10 19:07:27 ubuntu systemd[1]: Started A high performance web server and a reverse proxy server.
+
+A questo punto possiamo agganciare la pagina web di esempio di nginx dal browser mettendo nella barra degli indirizzi, l'IP della macchina reale o virtuale, nel nostro esempio "192.168.1.200".
+
+La pagina di "welcome" che compare nel browser è contenuta nel percorso /var/www/html mentre i file di configurazione di nginx sono contenuti nel percorso /etc/nginx
+
+
+Preparazione dell'utente e del  percorso del sito
+--------------------------------------------------
+
+Di qui in poi assumeremo come esempio la pubblicazione dell'applicazione web Agenziaweb.
+
+Per prima cosa andiamo a creare un utente speciale che è appunto Agenziaweb con il comando Linux che segue:
+
+	$ sudo adduser --disabled-password --shell /bin/false --gecos Agenziaweb agenziaweb
+
+	Adding user `agenziaweb' ...
+	Adding new group `agenziaweb' (1002) ...
+	Adding new user `agenziaweb' (1002) with group `agenziaweb' ...
+	Creating home directory `/home/agenziaweb' ...  
+	Copying files from `/etc/skel'...
+
+L'opzione --disabled-password fa in modo da creare un utente che può accedere senza password; --shell indicherebbe la shell di default dell'utente, tuttavia avendo indicato /bin/false chiunque provi a loggarsi con questo utente verrebbe "buttato fuori" perchè non esiste alcuna shell di supporto (non è questo lo scopo dell'utente agenziaweb); con --gecos (General Electric Comprehensive Operating System) impostiamo il nome dell'utente "vero"; l'ultimo parametro è proprio il nome utente, agenziaweb.
+
+Come si vede dalla risposta, viene automaticamente creato anche il gruppo agenziaweb e una directory home per l'utente; li useremo entrabi tra poco.
+
+Possiamo controllare che l'utente si sia aggiunto a quelli del sistema con il comando:
+
+	$ sudo less /etc/passwd
+
+Andiamo a creare i percorsi ed assegnare i permessi.
+
+	$ sudo mkdir /var/www/agenziaweb
+	$ sudo mkdir /var/www/agenziaweb/static
+	$ sudo mkdir /var/www/agenziaweb/media
+
+	$ sudo chown agenziaweb:agenziaweb /var/www/agenziaweb
+	$ sudo chown agenziaweb:www-data /var/www/agenziaweb/static
+	$ sudo chown agenziaweb:www-data /var/www/agenziaweb/media
+
+Con il comando chown [utente]:[gruppo] ... andiamo ad impostare l'utente e i gruppi proprietari che potranno accedere ai percorsi del sito; quindi andiamo ad impostare i permessi di accesso:
+
+	$ sudo chmod 755 /var/www/agenziaweb
+	$ sudo mkdir 750 /var/www/agenziaweb/static
+	$ sudo mkdir 750 /var/www/agenziaweb/media
+	
+	$ ls -al /var/www/agenziaweb
+
+	total 16
+	drwxr-xr-x 4 agenziaweb agenziaweb 4096 Jan 12 06:39 .
+	drwxr-xr-x 4 root       root       4096 Jan 12 06:38 ..
+	drwxr-x--- 2 agenziaweb www-data   4096 Jan 12 06:39 media
+	drwxr-x--- 2 agenziaweb www-data   4096 Jan 12 06:38 static
+
+
+Impostazioni per la produzione e file requirements.txt
+------------------------------------------------------
+
+Nel caso si usino librerie di terze parti in Django, ricordiamo che per esse è necessario mettere mani al file  settings.py  che viene impostato per leggere alcune delle variabili dall'ambiente, mentre alcune vengono codificate nel file stesso.
+
+Fra queste vi sono delle impostazioni che si rende necessario non siano accessibili dall'esterno ed esistono molti modi per farlo, fra cui anche l'uso di servizi esterni come etcd (https://etcd.io/), oppure è possibile memorizzarli da qualche parte nel proprio sistema.
+
+Qualsiasi cosa dovrebbe essere considerata, tranne quella di memorizzare valori e credenziali segreti nel file settings.py stesso, per evitare di esporre accidentalmente dati relativi a credenziali per il controllo del codice sorgente verso l'esterno.
+
+Avendoli in un file separato, possono essere ignorati dal tuo sistema di controllo del codice sorgente (ad esempio, aggiungendoli al file .gitignore), impedendone il caricamento ed inoltre possiamo scegliere un semplice formato chiave-valore che molti sistemi diversi possono comprendere. 
+
+Useremo bash per caricare le variabili nell'ambiente e quando inizieremo a usare l'applicazione tramite Gunicorn, anche systemd leggerà questo file per impostare anche le sue variabili di ambiente. Per questo motivo, non possiamo memorizzare le variabili in un File Python.
+
+Questo file può avere qualsiasi nome arbitrario ma dovrebbe essere qualcosa di facile da riconoscere, e sceglieremo  production.conf 
+
+I suoi valori sono stringhe, impostate in semplici coppie chiave-valore, per esempio:
+
+	CHIAVE_SERGRETA = "miachiave"
+
+Per usare le librerie di terze parti per Django, che il file manage.py viene aggiornato per leggere le impostazioni dalle nuove impostazioni basate sulla classe, perchè quando si lavora in modalità sviluppatore il normale punto di ingresso è manage.py. 
+
+Quando invece Django è servito da un'applicazione web server (come Gunicorn), esso viene interfacciato usando  wsgi.py  pertanto anche questo file deve essere aggiornato per leggere le nuove impostazioni; lo troviamo nel percorso (nel nostro esempio ) \AGENZIA\AGENZIA01\wsgi.py
+
+Similmente al processo di aggiornamento di  manage.py  bisognerà sostituire il valore predefinito di Django con quelli forniti da django-configurations.
+
+Innanzitutto, è necessario definire una classe di configurazione predefinita. Dal momento che intendiamo usare wsgi.py solo in produzione, DJANGO_CONFIGURATION può essere impostato su Prod; nel file wsgi.py aggiungiamo ...
+
+	os.environ.setdefault('DJANGO_CONFIGURATION', 'Prod')
+
+... e poi cambiamo l'import predefinito da ...
+
+	from django.core.wsgi import get_wsgi_application
+
+... in ...
+
+	from configurations.wsgi import get_wsgi_application
+
+In questo modo, stiamo usando get_wsgi_application da django-configurations invece di quello fornito da Django.
+
+Abbiamo aggiornato le impostazioni DATABASES e SECRET_KEY da cui leggere variabili di ambiente delle librerie di Django di terze parti. 
+
+Fra poco aggiorneremo anche settings.py in cui MEDIA_ROOT e STATIC_ROOT dovranno essere impostate per l'ambiente, ovvero i percorsi che abbiamo creato nel paragrafo precedente e modificheremo  wsgi.py  come appena descritto.
+
+
+Il prossimo importante passaggio è quello di creare il file requirements.txt che ci servirà per caricare, tramite pip, le librerie che abbiamo usato in fase di sviluppo anche nell'ambiente di produzione.
+
+La creazione del file DEVE essere effettuata stando all'interno dell' environment 
+
+
+
+
+
+
+
+
+
+
