@@ -246,9 +246,78 @@ Fra poco aggiorneremo anche settings.py in cui MEDIA_ROOT e STATIC_ROOT dovranno
 
 Il prossimo importante passaggio è quello di creare il file requirements.txt che ci servirà per caricare, tramite pip, le librerie che abbiamo usato in fase di sviluppo anche nell'ambiente di produzione.
 
-La creazione del file DEVE essere effettuata stando all'interno dell' environment 
+La creazione del file DEVE essere effettuata stando all'interno dell'environment che gestisce la macchina virtuale, quindi nella console interna di Pycharm dopo aver aperto il progetto oppure dopo aver attivato tramite virtaulenv (ad esempio) l'ambiente virtuale nel quale stiamo eseguendo il nostro progetto, diciamo l'ambiente "a". Eseguiamo prima una prova:
 
+	(a) $ pip3 freeze
 
+	dj-database-url==0.5.0
+	Django==3.0.3
+	django-configurations==2.2
+	…
+
+Questo output, che altro non è che l'insieme delle librerie che sono state installate nel nostro environment, lo andiamo a ridirezionare verso il file  requirements.txt ...
+
+	(a) $ pip3 freeze > requirements.txt
+
+Quando saremo nell'ambiente "b", nel quale non sono installate dette librerie, possiamo dire a pip di leggere questo elenco e quindi procedere a scaricare ed installare le stesse librerie dell'ambiente "a", leggendolo da  requirements.txt
+
+	(b) $ pip install - r requirements.txt
+
+Per prima cosa apriamo il nostro file  \AGENZIAWEB\agenziaweb\settings.py
+
+Prima della definizione di STATICFILES_DIRS va definita ...
+
+	STATIC_ROOT = values.Value()
+
+Questo farà leggere STATIC_ROOT dalla variabile di ambiente DJANGO_STATIC_ROOT , per impostazione predefinita torna vuota se non impostata.
+
+Ora modifichiamo l'impostazione di MEDIA_ROOT che attualmente è una stringa statica, da ...
+
+	MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+... a ...
+
+	MEDIA_ROOT = values.Value(os.path.join(BASE_DIR, 'media'))
+
+MEDIA_ROOT verrà letto dalla variabile di ambiente DJANGO_MEDIA_ROOT se è impostata, altrimenti ritorna il valore esistente.
+
+Nella directory "root" del progetto (nel nostro caso \AGENZIA\) andiamo a creare il file denominato production.conf
+
+Qui andremo ad insere tutte le impostazioni, uno per riga; la prima riga che aggiungiamo serve a dire a  django-configurations quale classe di configurazione utilizzare, quindi semplicemente il valore "Prod":
+
+	DJANGO_CONFIGURATION="Prod"
+
+Successivamente, è necessario impostare una chiave segreta e allo scopo qualsiasi stringa casuale di 50 caratteri dovrebbe andare bene. 
+
+Possiamo generare questa stringa casuale usando proprio Django eseguendo il seguente comando da terminale ...
+
+	python3 -c "import django.utils.crypto; print(django.utils.crypto.get_random_string(50, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\!@#\$%^&*()-='))"
+
+... quindi incolliamo il valore generato nel file production.conf in questo modo:
+
+	DJANGO_SECRET_KEY="EZaI^PksI6ISi7BkNxG=2yYiav*=#FN&g)7Of4gy@-VcSQkdU5"
+	
+Ora aggiungiamo gli URL del database. Inserisci questo nella riga successiva:
+
+DJANGO_DATABASE_URL="postgres://bookr:password@localhost/bookr"
+Tuttavia, assicurati di sostituire la password con la password che hai utilizzato per il
+bookr Utente PostgreSQL.
+7. Quindi, aggiungi queste righe per impostare le directory multimediali e statiche:
+DJANGO_STATIC_ROOT="/var/www/bookr/static"
+DJANGO_MEDIA_ROOT="/var/www/bookr/media"
+8. L'ultima impostazione da aggiungere è ALLOWED_HOSTS, che è un elenco di nomi host
+che possono essere utilizzati per accedere al tuo sito. Questo sarà l'indirizzo IP o
+nome host che hai utilizzato per connetterti tramite SSH, qualcosa come:
+DJANGO_ALLOWED_HOSTS="192.168.0.123"
+O:
+DJANGO_ALLOWED_HOSTS="localhost"
+Nota che anche se localhost e 127.0.0.1 di solito hanno lo stesso significato
+cosa, assicurati di essere coerente con ciò che usi. Oppure, per sicurezza, potresti
+aggiungi entrambi:
+DJANGO_ALLOWED_HOSTS="host locale,127.0.0.1"
+Quando esegui la distribuzione su un server virtuale ospitato, utilizzerai i nomi di dominio che
+che hai scelto per il tuo sito.
+Ora dovresti avere sei righe in questo file. Puoi salvarlo e chiuderlo.
 
 
 
