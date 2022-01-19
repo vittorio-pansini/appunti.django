@@ -155,7 +155,11 @@ La pagina di "welcome" che compare nel browser è contenuta nel percorso /var/ww
 Preparazione dell'utente e del  percorso del sito
 --------------------------------------------------
 
-Di qui in poi assumeremo come esempio la pubblicazione dell'applicazione web Agenziaweb.
+Di qui in poi assumeremo come esempio la pubblicazione dell'applicazione web Agenziaweb così composta
+
+	\AGENZIA01
+		\AGENZIA01		(progetto)
+		\agenziaweb		(app)
 
 Per prima cosa andiamo a creare un utente speciale che è appunto Agenziaweb con il comando Linux che segue:
 
@@ -171,9 +175,13 @@ L'opzione --disabled-password fa in modo da creare un utente che può accedere s
 
 Come si vede dalla risposta, viene automaticamente creato anche il gruppo agenziaweb e una directory home per l'utente; li useremo entrabi tra poco.
 
-Possiamo controllare che l'utente si sia aggiunto a quelli del sistema con il comando:
+Possiamo controllare che l'utente si sia aggiunto a quelli del sistema con il comando ...
 
 	$ sudo less /etc/passwd
+
+
+Creazione e configurazione dei percorsi media e static
+------------------------------------------------------
 
 Andiamo a creare i percorsi ed assegnare i permessi.
 
@@ -199,27 +207,92 @@ Con il comando chown [utente]:[gruppo] ... andiamo ad impostare l'utente e i gru
 	drwxr-x--- 2 agenziaweb www-data   4096 Jan 12 06:39 media
 	drwxr-x--- 2 agenziaweb www-data   4096 Jan 12 06:38 static
 
+Ora che i percorsi sono stati creati, accertiamoci siano correttamente configurati e per far questo interveniamo sul file  \AGENZIAWEB\agenziaweb\settings.py 
 
-Impostazioni per la produzione e file requirements.txt
+Prima della definizione di STATICFILES_DIRS va definita ...
+
+	STATIC_ROOT = values.Value()
+
+Questo farà leggere STATIC_ROOT dalla variabile di ambiente DJANGO_STATIC_ROOT , per impostazione predefinita torna vuota se non impostata.
+
+Ora modifichiamo l'impostazione di MEDIA_ROOT che attualmente è una stringa statica, da ...
+
+	MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+... a ...
+
+	MEDIA_ROOT = values.Value(os.path.join(BASE_DIR, 'media'))
+
+MEDIA_ROOT verrà letto dalla variabile di ambiente DJANGO_MEDIA_ROOT se è impostata, altrimenti ritorna il valore esistente.
+
+
+
+
+
+
+
 ------------------------------------------------------
 
-Nel caso si usino librerie di terze parti in Django, ricordiamo che per esse è necessario mettere mani al file  settings.py  che viene impostato per leggere alcune delle variabili dall'ambiente, mentre alcune vengono codificate nel file stesso.
+Per usare le librerie di terze parti per Django, viene usata l'applicazione "django-configurations third-party" che consente di di usare classi per definire impostazioni differenti a seconda che si sia in modalità sviluppo (dev) o in modalità produzione.
+
+A tale scopo è necessario mettere mani al file  settings.py  che viene impostato per leggere alcune delle variabili dall'ambiente, mentre altre vengono codificate nel file stesso.
 
 Fra queste vi sono delle impostazioni che si rende necessario non siano accessibili dall'esterno ed esistono molti modi per farlo, fra cui anche l'uso di servizi esterni come etcd (https://etcd.io/), oppure è possibile memorizzarli da qualche parte nel proprio sistema.
 
-Qualsiasi cosa dovrebbe essere considerata, tranne quella di memorizzare valori e credenziali segreti nel file settings.py stesso, per evitare di esporre accidentalmente dati relativi a credenziali per il controllo del codice sorgente verso l'esterno.
+Qualsiasi soluzione è valida, tranne quella di memorizzare valori e credenziali segreti nel file settings.py stesso, per evitare di esporre accidentalmente dati relativi a credenziali per il controllo del codice sorgente verso l'esterno.
 
-Avendoli in un file separato, possono essere ignorati dal tuo sistema di controllo del codice sorgente (ad esempio, aggiungendoli al file .gitignore), impedendone il caricamento ed inoltre possiamo scegliere un semplice formato chiave-valore che molti sistemi diversi possono comprendere. 
+Avendoli in un file separato, possono essere ignorati dal tuo sistema di controllo del codice sorgente (ad esempio, aggiungendoli al file .gitignore), impedendone il caricamento; inoltre possiamo scegliere un semplice formato chiave-valore così come viene fatto in altri contesti. 
 
 Useremo bash per caricare le variabili nell'ambiente e quando inizieremo a usare l'applicazione tramite Gunicorn, anche systemd leggerà questo file per impostare anche le sue variabili di ambiente. Per questo motivo, non possiamo memorizzare le variabili in un File Python.
 
-Questo file può avere qualsiasi nome arbitrario ma dovrebbe essere qualcosa di facile da riconoscere, e sceglieremo  production.conf 
+Questo file può avere qualsiasi nome arbitrario ma facile da riconoscere, perciò sceglieremo  "production.conf"
 
-I suoi valori sono stringhe, impostate in semplici coppie chiave-valore, per esempio:
+Come detto, suoi valori sono stringhe, impostate in semplici coppie chiave-valore, per esempio:
 
 	CHIAVE_SERGRETA = "miachiave"
 
-Per usare le librerie di terze parti per Django, che il file manage.py viene aggiornato per leggere le impostazioni dalle nuove impostazioni basate sulla classe, perchè quando si lavora in modalità sviluppatore il normale punto di ingresso è manage.py. 
+
+
+
+
+
+Preparazione del file requirements.txt
+--------------------------------------
+
+Il prossimo importante passaggio è quello di creare il file requirements.txt che ci servirà per caricare, tramite pip, le librerie che abbiamo usato in fase di sviluppo anche nell'ambiente di produzione.
+
+La creazione del file DEVE essere effettuata stando all'interno dell'environment che gestisce la macchina virtuale, quindi nella console interna di Pycharm dopo aver aperto il progetto oppure dopo aver attivato tramite virtaulenv (ad esempio) l'ambiente virtuale nel quale stiamo eseguendo il nostro progetto, diciamo l'ambiente "a". Eseguiamo prima una prova:
+
+	(a) $ pip3 freeze
+
+	dj-database-url==0.5.0
+	Django==3.0.3
+	django-configurations==2.2
+	…
+
+Questo output, che altro non è che l'insieme delle librerie che sono state installate nel nostro environment, lo andiamo a ridirezionare verso il file  requirements.txt ...
+
+	(a) $ pip3 freeze > requirements.txt
+
+Quando saremo nell'ambiente "b", nel quale non sono installate dette librerie, possiamo dire a pip di leggere questo elenco e quindi procedere a scaricare ed installare le stesse librerie dell'ambiente "a", leggendolo da  requirements.txt
+
+	(b) $ pip install - r requirements.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+manage.py  viene aggiornato per leggere le impostazioni da quelle nuove basate sulla classe, perchè quando si lavora in modalità sviluppatore il normale punto di ingresso è manage.py.
 
 Quando invece Django è servito da un'applicazione web server (come Gunicorn), esso viene interfacciato usando  wsgi.py  pertanto anche questo file deve essere aggiornato per leggere le nuove impostazioni; lo troviamo nel percorso (nel nostro esempio ) \AGENZIA\AGENZIA01\wsgi.py
 
@@ -241,45 +314,15 @@ In questo modo, stiamo usando get_wsgi_application da django-configurations inve
 
 Abbiamo aggiornato le impostazioni DATABASES e SECRET_KEY da cui leggere variabili di ambiente delle librerie di Django di terze parti. 
 
+
+
+
 Fra poco aggiorneremo anche settings.py in cui MEDIA_ROOT e STATIC_ROOT dovranno essere impostate per l'ambiente, ovvero i percorsi che abbiamo creato nel paragrafo precedente e modificheremo  wsgi.py  come appena descritto.
 
 
-Il prossimo importante passaggio è quello di creare il file requirements.txt che ci servirà per caricare, tramite pip, le librerie che abbiamo usato in fase di sviluppo anche nell'ambiente di produzione.
 
-La creazione del file DEVE essere effettuata stando all'interno dell'environment che gestisce la macchina virtuale, quindi nella console interna di Pycharm dopo aver aperto il progetto oppure dopo aver attivato tramite virtaulenv (ad esempio) l'ambiente virtuale nel quale stiamo eseguendo il nostro progetto, diciamo l'ambiente "a". Eseguiamo prima una prova:
 
-	(a) $ pip3 freeze
 
-	dj-database-url==0.5.0
-	Django==3.0.3
-	django-configurations==2.2
-	…
-
-Questo output, che altro non è che l'insieme delle librerie che sono state installate nel nostro environment, lo andiamo a ridirezionare verso il file  requirements.txt ...
-
-	(a) $ pip3 freeze > requirements.txt
-
-Quando saremo nell'ambiente "b", nel quale non sono installate dette librerie, possiamo dire a pip di leggere questo elenco e quindi procedere a scaricare ed installare le stesse librerie dell'ambiente "a", leggendolo da  requirements.txt
-
-	(b) $ pip install - r requirements.txt
-
-Per prima cosa apriamo il nostro file  \AGENZIAWEB\agenziaweb\settings.py
-
-Prima della definizione di STATICFILES_DIRS va definita ...
-
-	STATIC_ROOT = values.Value()
-
-Questo farà leggere STATIC_ROOT dalla variabile di ambiente DJANGO_STATIC_ROOT , per impostazione predefinita torna vuota se non impostata.
-
-Ora modifichiamo l'impostazione di MEDIA_ROOT che attualmente è una stringa statica, da ...
-
-	MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-... a ...
-
-	MEDIA_ROOT = values.Value(os.path.join(BASE_DIR, 'media'))
-
-MEDIA_ROOT verrà letto dalla variabile di ambiente DJANGO_MEDIA_ROOT se è impostata, altrimenti ritorna il valore esistente.
 
 Nella directory "root" del progetto (nel nostro caso \AGENZIA\) andiamo a creare il file denominato production.conf
 
@@ -297,27 +340,34 @@ Possiamo generare questa stringa casuale usando proprio Django eseguendo il segu
 
 	DJANGO_SECRET_KEY="EZaI^PksI6ISi7BkNxG=2yYiav*=#FN&g)7Of4gy@-VcSQkdU5"
 	
-Ora aggiungiamo gli URL del database. Inserisci questo nella riga successiva:
+Se nel nostro progetto abbiamo adottato PostgreSQL, dobbiamo aggiungere gli URL di detto database; nella riga successiva aggiungiamo...
 
-DJANGO_DATABASE_URL="postgres://bookr:password@localhost/bookr"
-Tuttavia, assicurati di sostituire la password con la password che hai utilizzato per il
-bookr Utente PostgreSQL.
-7. Quindi, aggiungi queste righe per impostare le directory multimediali e statiche:
-DJANGO_STATIC_ROOT="/var/www/bookr/static"
-DJANGO_MEDIA_ROOT="/var/www/bookr/media"
-8. L'ultima impostazione da aggiungere è ALLOWED_HOSTS, che è un elenco di nomi host
-che possono essere utilizzati per accedere al tuo sito. Questo sarà l'indirizzo IP o
-nome host che hai utilizzato per connetterti tramite SSH, qualcosa come:
-DJANGO_ALLOWED_HOSTS="192.168.0.123"
-O:
-DJANGO_ALLOWED_HOSTS="localhost"
-Nota che anche se localhost e 127.0.0.1 di solito hanno lo stesso significato
-cosa, assicurati di essere coerente con ciò che usi. Oppure, per sicurezza, potresti
-aggiungi entrambi:
-DJANGO_ALLOWED_HOSTS="host locale,127.0.0.1"
-Quando esegui la distribuzione su un server virtuale ospitato, utilizzerai i nomi di dominio che
-che hai scelto per il tuo sito.
-Ora dovresti avere sei righe in questo file. Puoi salvarlo e chiuderlo.
+	DJANGO_DATABASE_URL="postgres://bookr:password@localhost/bookr"
+
+... che nelle specifiche di PostgreSQL indica il collegamento al database con l'utente bookr, con la password "password", che si trova prima della chiocciola e che va sostituita con la vera password che si è scelta per l'utente bookr; il database che si trova sullo stesso host (ecco perchè localhost) si chiama bookr.
+
+Aggiungiamo poi le prossime righe per impostare le directory /media e /static, che abbiamo preparato precedentemente:
+
+	DJANGO_STATIC_ROOT="/var/www/bookr/static"
+	DJANGO_MEDIA_ROOT="/var/www/bookr/media"
+
+L'ultima impostazione da aggiungere è ALLOWED_HOSTS, che è un elenco di nomi di host che possono essere utilizzati per accedere al sito. Questo sarà l'indirizzo IP o il nome host che viene utilizzato per connettersi tramite SSH come...
+
+	DJANGO_ALLOWED_HOSTS="192.168.0.123"
+	
+... oppure ...
+	
+	DJANGO_ALLOWED_HOSTS="localhost"
+	
+Notiamo che anche se localhost e 127.0.0.1 di solito hanno lo stesso significato, bisogna assicurarsi di essere coerente con ciò che si usa, oppure, per sicurezza, possiamo aggiungerli entrambi:
+
+	DJANGO_ALLOWED_HOSTS="host locale,127.0.0.1"
+
+Quando eseguiamo la distribuzione su un server virtuale ospitato, utilizzeremo i nomi di dominio che abbiamo scelto per il nostro sito.
+
+Possiamo ora salvare il nostro file production.conf e tornare ad occuparci del file \AGENZIA\AGENZIA01\wsgi.py
+
+
 
 
 

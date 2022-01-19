@@ -4,8 +4,8 @@
 *********************************
 
 
-Rimuovere l'errore dell'icona mancante
---------------------------------------
+[.] Rimuovere l'errore dell'icona mancante
+------------------------------------------
 
 Se all'avvio compare l'errore ...
 
@@ -34,8 +34,8 @@ Diamo per assunto che i file statici sinao stati configurati correttamente; andi
 In questo modo andiamo a risolvere la richiesta dei browser di avere il favicon.ico
 
 
-Superare l'errore "1048 last_login cannot be null" in MySQL
------------------------------------------------------------
+[.] Superare l'errore "1048 last_login cannot be null" in MySQL
+---------------------------------------------------------------
 
 Durante la creazione di un utente administrator può verificarsi il seguente errore:
 
@@ -61,5 +61,30 @@ Lasciamo il terminale di MySQL e rilanciamo le migrazioni in Django:
 	0005_alter_user_last_login_null - [OK]
 
 Se vediamo altri conflitti, è corretto perchè abbiamo bisogno di fare solo questa migrazione.
+
+
+[.] Installare una libreria sotto Pycharm
+-----------------------------------------
+
+Menu di Pycharm  File/Settings(Ctrl+Alt+S) che farà apparire la finestra delle impostazioni.
+
+Aprire il nodo  "> Project: {nome progetto}" e scegliere "Python interpreter"; fare click su "+" e cercare il nome della libreria da installare, ad esempio "Pillow".
+
+In basso è possibile specificare la versione o lasciare che sia caricata quella corrente.
+
+Fare click su "Install Package" e attendere che sia installato il pacchetto, quando comparirà il messaggio di avvenuta installazione.
+
+[.] Rimuovere l'errore models.W042
+----------------------------------
+
+Se all'avvio compare nella console un messaggio del tipo ...
+
+	" WARNINGS: {nometabella/modello}: (models.W042) Auto-created primary key used when not defining a primary key type, by default 'django.db.models.AutoField'. HINT: Configure the DEFAULT_AUTO_FIELD setting or the ReviewsConfig.default_auto_field attribute to point to a subclass of AutoField, ...."
+
+... il motivo  è che si è creato un modello (ovvero una tabella) che non ha chiave primaria oppure che la chiave esterna usata per collegare due classi non è primaria.
+
+Per risolvere o si rende la chiave usata primaria o si aggiunge in settings.py la seguente riga...
+
+	DEFAULT_AUTO_FIELD='django.db.models.AutoField'
 
 
