@@ -157,8 +157,8 @@ Preparazione dell'utente e del  percorso del sito
 
 Di qui in poi assumeremo come esempio la pubblicazione dell'applicazione web Agenziaweb così composta
 
-	\AGENZIA01
-		\AGENZIA01		(progetto)
+	\AGENZIAW			(root del progetto)
+		\AGENZIAW		(progetto)
 		\agenziaweb		(app)
 
 Per prima cosa andiamo a creare un utente speciale che è appunto Agenziaweb con il comando Linux che segue:
@@ -207,7 +207,7 @@ Con il comando chown [utente]:[gruppo] ... andiamo ad impostare l'utente e i gru
 	drwxr-x--- 2 agenziaweb www-data   4096 Jan 12 06:39 media
 	drwxr-x--- 2 agenziaweb www-data   4096 Jan 12 06:38 static
 
-Ora che i percorsi sono stati creati, accertiamoci siano correttamente configurati e per far questo interveniamo sul file  \AGENZIAWEB\agenziaweb\settings.py 
+Ora che i percorsi sono stati creati, accertiamoci siano correttamente configurati e per far questo interveniamo sul file  \AGENZIAW\agenziaweb\settings.py 
 
 Prima della definizione di STATICFILES_DIRS va definita ...
 
@@ -223,37 +223,83 @@ Ora modifichiamo l'impostazione di MEDIA_ROOT che attualmente è una stringa sta
 
 	MEDIA_ROOT = values.Value(os.path.join(BASE_DIR, 'media'))
 
-MEDIA_ROOT verrà letto dalla variabile di ambiente DJANGO_MEDIA_ROOT se è impostata, altrimenti ritorna il valore esistente.
+Questo farà leggere MEDIA_ROOT dalla variabile di ambiente DJANGO_MEDIA_ROOT se è impostata, altrimenti ritorna il valore esistente.
 
 
-
-
-
-
-
-------------------------------------------------------
+Creazione del file production.conf
+----------------------------------
 
 Per usare le librerie di terze parti per Django, viene usata l'applicazione "django-configurations third-party" che consente di di usare classi per definire impostazioni differenti a seconda che si sia in modalità sviluppo (dev) o in modalità produzione.
 
+# ndr si fa riferimento al capitolo 15 del libro #
+
 A tale scopo è necessario mettere mani al file  settings.py  che viene impostato per leggere alcune delle variabili dall'ambiente, mentre altre vengono codificate nel file stesso.
 
-Fra queste vi sono delle impostazioni che si rende necessario non siano accessibili dall'esterno ed esistono molti modi per farlo, fra cui anche l'uso di servizi esterni come etcd (https://etcd.io/), oppure è possibile memorizzarli da qualche parte nel proprio sistema.
+Fra queste vi sono delle impostazioni che si rende necessario non siano accessibili dall'esterno ed esistono molti modi per farlo, fra cui anche l'uso di servizi esterni come etcd (https://etcd.io/), oppure è possibile memorizzarli da qualche parte nel proprio sistema; qualsiasi soluzione è valida, TRANNE quella di memorizzare valori e credenziali segreti nel file settings.py perchè si rischia di esporre accidentalmente dati relativi a credenziali per il controllo del codice sorgente verso l'esterno.
 
-Qualsiasi soluzione è valida, tranne quella di memorizzare valori e credenziali segreti nel file settings.py stesso, per evitare di esporre accidentalmente dati relativi a credenziali per il controllo del codice sorgente verso l'esterno.
+Avendoli in un file separato, possiamo fare in modo che vengano ignorati dal tuo sistema di controllo del codice sorgente (ad esempio, aggiungendoli al file .gitignore), impedendone il caricamento.
 
-Avendoli in un file separato, possono essere ignorati dal tuo sistema di controllo del codice sorgente (ad esempio, aggiungendoli al file .gitignore), impedendone il caricamento; inoltre possiamo scegliere un semplice formato chiave-valore così come viene fatto in altri contesti. 
+Per quanto riguarda il formato, possiamo scegliere un semplice file di testo composto da una serie di elementi chiave-valore così come viene fatto in molti altri contesti, per esempio  CHIAVE_SERGRETA = "miachiave"  con la chiave convenzionalmente in maiuscolo e il valore in stringa fra doppi apici.
 
-Useremo bash per caricare le variabili nell'ambiente e quando inizieremo a usare l'applicazione tramite Gunicorn, anche systemd leggerà questo file per impostare anche le sue variabili di ambiente. Per questo motivo, non possiamo memorizzare le variabili in un File Python.
+Non potrà essere un file python perchè useremo bash per caricare le variabili nell'ambiente e quando inizieremo a usare l'applicazione tramite Gunicorn, anche systemd leggerà questo file per impostare anche le sue variabili di ambiente.
 
-Questo file può avere qualsiasi nome arbitrario ma facile da riconoscere, perciò sceglieremo  "production.conf"
+Per il resto questo file può avere qualsiasi nome arbitrario ma facile da riconoscere, perciò sceglieremo il nome convenzionale di "production.conf"; andiamo quindi a creare ed aprire il file nella root del progetto ...
 
-Come detto, suoi valori sono stringhe, impostate in semplici coppie chiave-valore, per esempio:
+	\AGENZIAW\production.conf 
 
-	CHIAVE_SERGRETA = "miachiave"
+... ed inseriamo le seguenti righe al suo interno:
+
+	DJANGO_CONFIGURATION = "Prod"
+	DJANGO_SECRET_KEY = "EZaI^PksI6ISi7BkNxG=2yYiav*=#FN&g)7Of4gy@-VcSQkdU5"
+	# PostgreSQL:
+	#  DJANGO_DATABASE_URL = "postgres://user:password@localhost/databasename"
+	#  DJANGO_DATABASE_URL = "postgres://user:password@127.0.0.1:5432/databasename"
+	# MySQL:
+	#  DJANGO_DATABASE_URL = "mysql://user:password@localhost/databasename"
+	#  DJANGO_DATABASE_URL = "mysql://user:password@127.0.0.1:3306/databasename"
+	DJANGO_STATIC_ROOT="/var/www/bookr/static"
+	DJANGO_MEDIA_ROOT="/var/www/bookr/media"
+	#  DJANGO_ALLOWED_HOSTS="192.168.1.23"
+	#  DJANGO_ALLOWED_HOSTS="localhost, 127.0.0.1"
+
+La prima riga che serve a dire a django-configurations quale classe di configurazione utilizzare, quindi semplicemente il valore "Prod" che sta per "Produzione".
+
+Nella seconda riga abbiamo impostato una chiave segreta, composta da una stringa casuale di 50 caratteri; possiamo produrre questa stringa in molti modi, uno di questi è quello di farla generare direttamente da Python, eseguendo dal terminale il seguente comando:
+
+	python3 -c "import django.utils.crypto; print(django.utils.crypto.get_random_string(50, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\!@#\$%^&*()-='))"
+	
+Se nel nostro progetto stiamo usando dei database (condizione normale, dato che SQLite3 NON può essere usato sul web, anche perchè non adatto), dobbiamo valorizzare DJANGO_DATABASE_URL usando uno dei due valori che qui sono presentati commentati.
+
+Le stringhe vanno modificate opportunamente, sostituendo "user", "password" e "databasename" rispettivamente con il nome del superuser che accede al database, la sua password in chiaro e il nome del database; le stringhe sono configurate per usare un database installato sulla stessa macchina dove dovrà girare il sito, quindi localhost o 127.0.0.1, ma ciò non toglie che possa fare riferimento ad un'altra macchina interna (es. 192.168.xxx.xxx, mio.server.dei.database), le porte sono 5432 per PostgreSQL e 3306 per MySQL.
+
+Seguono le righe che indicano la posizione fisica delle directory /media e /static, che abbiamo preparato precedentemente.
+
+L'impostazione ALLOWED_HOSTS che segue è un elenco di IP e/o nomi di host che possono essere utilizzati per accedere al sito tramite SSH; presentiamo due esempi, nel primo indichiamo l'indirizzo IP di un computer di servizio, mentre nel secondo indichiamo come unico utilizzato l'host locale; si noti che è possibile indicare più indirizzi, dividendoli tramite virgola; quando eseguiamo la distribuzione su un server virtuale ospitato, utilizzeremo i nomi di dominio che abbiamo scelto per il nostro sito.
+
+Le informazioni finora inserite possono essere sufficienti: salviamo e chiudiamo il file.
 
 
+Modifica del file wsgi.py
+-------------------------
 
+Apriamo ora  \AGENZIAW\AGENZIAW\wsgi.py  (file che si trova dunque all'interno della directory del pacchetto principale) e andiamo a modificarlo ottenendo il seguente codice:
 
+	import os
+
+	# from django.core.wsgi import get_wsgi_application
+	from configurations.wsgi import get_wsgi_application
+
+	os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'AGENZIAW.settings')
+
+	os.environ.setdefault('DJANGO_CONFIGURATION', 'Prod')
+
+	application = get_wsgi_application()
+
+Abbiamo cambiato l'import di get_wsgi_application ereditandolo da configurations e non da django.core e in questo modo, stiamo usando get_wsgi_application da django-configurations invece di quello fornito da Django.
+
+Quindi abbiamo aggiunto una chiamata che determina l'impostazione predefinita dell'ambiente di "DJANGO_CONFIGURATION" su "Prod" cioè modalità produzione.
+
+Anche per il file wsgi.py le modifiche apportate sono sufficienti: salviamo e chiudiamo.
 
 
 Preparazione del file requirements.txt
@@ -278,94 +324,504 @@ Quando saremo nell'ambiente "b", nel quale non sono installate dette librerie, p
 
 	(b) $ pip install - r requirements.txt
 
+Per ora apriamo il file requirements.txt e aggiungiamo in coda questi due files:
+
+	gunicorn==20.0.4
+	psycopg2==2.8.5
+
+In questo modo saremo sicuri che pip andrà ad installare sia Gunicorn sia il connettore PostgreSQL; naturalmente possiamo NON includere psycopg2 se non siamo intenzionati ad usare PostgreSQL.
 
 
+Trasferimento e preparazione dei file sul server
+------------------------------------------------
 
+Avviamo FileZilla e connettiamoci al nostro server, ad esempio il  192.168.1.200  anteponendo "sftp://" quindi, "sftp://192.168.1.200"; nome utente e password sono le stesse usate per connettersi tramite SSH, quindi facciamo click su [Quickconnect] per connetterci in ftp al server.
 
+La prima volta che ci connettiamo al server potrebbe comparire un messaggio di avvertimento "The server's host is unknown..."; spuntiamo con fiducia la casella "Always trust this host,..." e proseguiamo.
 
+Una volta connessi, avremo due elenchi paralleli: a sinistra quello locale, a destra quello del server, che punterà al percorso home dell'utente (o superutente) che si è scelto per connettersi.
 
+A questo punto navighiamo nel percorso locale, fino ad individuare il percorso del progetto (nel nostro caso AGENZIAW) e facciamo un semplice drag 'n drop in quello del server e attendiamo che tutti i file siano trasferiti.
 
+Nota: uno dei motivi per cui è meglio tenere il percorso della macchina virtuale all'esterno del progetto è proprio quello di evitare di trascinarla sul server, dove non servirà a nulla, in realtà.
 
+Al termine del trasferimento procediamo a collegarci in modalità SSH e interrogare dal prompt il percorso appena trasferito.
 
+Ora che i file sono stati trasferiti, dobbiamo procedere a spostare la directory del progetto AGENZIAW nella directory home dell'utente agenziaweb, utilizzando il comando mv.
 
+	$ sudo mv AGENZIAW /home/agenziaweb/
 
+Ribadiamo che l'utente agenziaweb NON può fare il login, anche se ha tutte le caratteristiche di un utente normale, compreso il percorso home, perchè abbiamo detto esplicitamente che questo non è possibile in fase di creazione; chiaramente, altri utenti sudoers o root possono operare sui file, come stiamo facendo.
 
+Modifichiamo ora utente proprietario ed impostiamo l'accesso:
 
+	$ sudo chown -R agenziaweb:agenziaweb /home/agenziaweb/AGENZIAW
+	$ sudo chmod 600 /home/agenziaweb/AGENZIAW/production.conf
 
-manage.py  viene aggiornato per leggere le impostazioni da quelle nuove basate sulla classe, perchè quando si lavora in modalità sviluppatore il normale punto di ingresso è manage.py.
+Il parametro -R di chown (che sta per "recursive") garantisce che tutte le sottodirectory di AGENZIAW diventino di proprietà dell'utente agenziaweb e del gruppo agenziaweb.
 
-Quando invece Django è servito da un'applicazione web server (come Gunicorn), esso viene interfacciato usando  wsgi.py  pertanto anche questo file deve essere aggiornato per leggere le nuove impostazioni; lo troviamo nel percorso (nel nostro esempio ) \AGENZIA\AGENZIA01\wsgi.py
+Dando un chmod di 600 impediamo a chi non è del gruppo e ad altri utenti di accedere al nostro file production.conf, mentre agenziaweb potrà solo leggerlo ed eseguirlo.
 
-Similmente al processo di aggiornamento di  manage.py  bisognerà sostituire il valore predefinito di Django con quelli forniti da django-configurations.
+Adesso switchiamo nell'utente agenziaweb e portiamoci nella sua home, dove adremo a creare una macchina virtuale con virtualenv, similmente a quanto fatto nel primo capitolo:
 
-Innanzitutto, è necessario definire una classe di configurazione predefinita. Dal momento che intendiamo usare wsgi.py solo in produzione, DJANGO_CONFIGURATION può essere impostato su Prod; nel file wsgi.py aggiungiamo ...
-
-	os.environ.setdefault('DJANGO_CONFIGURATION', 'Prod')
-
-... e poi cambiamo l'import predefinito da ...
-
-	from django.core.wsgi import get_wsgi_application
-
-... in ...
-
-	from configurations.wsgi import get_wsgi_application
-
-In questo modo, stiamo usando get_wsgi_application da django-configurations invece di quello fornito da Django.
-
-Abbiamo aggiornato le impostazioni DATABASES e SECRET_KEY da cui leggere variabili di ambiente delle librerie di Django di terze parti. 
-
-
-
-
-Fra poco aggiorneremo anche settings.py in cui MEDIA_ROOT e STATIC_ROOT dovranno essere impostate per l'ambiente, ovvero i percorsi che abbiamo creato nel paragrafo precedente e modificheremo  wsgi.py  come appena descritto.
-
-
-
-
-
-
-Nella directory "root" del progetto (nel nostro caso \AGENZIA\) andiamo a creare il file denominato production.conf
-
-Qui andremo ad insere tutte le impostazioni, uno per riga; la prima riga che aggiungiamo serve a dire a  django-configurations quale classe di configurazione utilizzare, quindi semplicemente il valore "Prod":
-
-	DJANGO_CONFIGURATION="Prod"
-
-Successivamente, è necessario impostare una chiave segreta e allo scopo qualsiasi stringa casuale di 50 caratteri dovrebbe andare bene. 
-
-Possiamo generare questa stringa casuale usando proprio Django eseguendo il seguente comando da terminale ...
-
-	python3 -c "import django.utils.crypto; print(django.utils.crypto.get_random_string(50, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\!@#\$%^&*()-='))"
-
-... quindi incolliamo il valore generato nel file production.conf in questo modo:
-
-	DJANGO_SECRET_KEY="EZaI^PksI6ISi7BkNxG=2yYiav*=#FN&g)7Of4gy@-VcSQkdU5"
+	$ sudo -H -u agenziaweb /bin/bash
+	$ cd
+	$ python3 -m virtaulenv --python=python3 awebenv
 	
-Se nel nostro progetto abbiamo adottato PostgreSQL, dobbiamo aggiungere gli URL di detto database; nella riga successiva aggiungiamo...
+	Already using interpreter /usr/bin/python3
+	Using base prefix '/usr'
+	New python executable in /home/agenziaweb/awebenv/bin/python3
+	Also creating executable in /home/agenziaweb/awebenv/bin/python
+	Installing setuptools, pkg_resources, pip, wheel...done.
 
-	DJANGO_DATABASE_URL="postgres://bookr:password@localhost/bookr"
+A questo punto installiamo tutti i pacchetti che abbiamo preparato nel file requirements.txt nei passaggi precedenti.
 
-... che nelle specifiche di PostgreSQL indica il collegamento al database con l'utente bookr, con la password "password", che si trova prima della chiocciola e che va sostituita con la vera password che si è scelta per l'utente bookr; il database che si trova sullo stesso host (ecco perchè localhost) si chiama bookr.
+	  $ source awebenv/bin/activate
+	()$ pip3 install -r bookr/requirements.txt
+	.......
 
-Aggiungiamo poi le prossime righe per impostare le directory /media e /static, che abbiamo preparato precedentemente:
+Ora è possibile usare Django, ma prima è necessario esportare le impostazioni nell'ambiente del sistema operativo:
 
-	DJANGO_STATIC_ROOT="/var/www/bookr/static"
-	DJANGO_MEDIA_ROOT="/var/www/bookr/media"
+	()$ cd AGENZIAW
+	()$ export $(cat production.conf | xargs)
 
-L'ultima impostazione da aggiungere è ALLOWED_HOSTS, che è un elenco di nomi di host che possono essere utilizzati per accedere al sito. Questo sarà l'indirizzo IP o il nome host che viene utilizzato per connettersi tramite SSH come...
+Il comando  export  è tipico delle shell testuali dei sistemi operativi Unix e Unix-like, che esporta delle variabili della shell rendendole c.d. "variabili d'ambiente", con la possibilità nel contempo di assegnare loro dei valori; le variabili d'ambiente sono automaticamente propagate ai programmi avviati dentro la shell.
 
-	DJANGO_ALLOWED_HOSTS="192.168.0.123"
+L'output di cat viene acquisito da xargs che è un comando che "provoca" l'esecuzione di export; in sostanza cat produce un rigo che viene intercettato da xargs che esegue export seguito dal contenuto passato da cat; in sostanza verranno eseguiti tanti comandi expot quanti sono i righi che abbiamo inserito in production.conf.
+
+L'esportazione non produrrà alcun output di verbose e per verificare che le variabili siano state correttamente caricate nel sistema andremo ad interrogarne una:
+
+	()$ echo $DJANGO_STATIC_ROOT
 	
-... oppure ...
+Se la risposta è  /var/www/agenziaweb/static  allora ha funzionato.
+
+I prossimi passi consistono nell'eseguire la migrazione del database ...
+
+	()$ python3 manage.py migrate
 	
-	DJANGO_ALLOWED_HOSTS="localhost"
+... e la raccolta dei file statici ...
+
+	()$ python3 manage.py collectstatic
 	
-Notiamo che anche se localhost e 127.0.0.1 di solito hanno lo stesso significato, bisogna assicurarsi di essere coerente con ciò che si usa, oppure, per sicurezza, possiamo aggiungerli entrambi:
+	You have requested to collect static files at the destination 
+	location as specified in your settings:
+	
+	/var/www/agenziaweb/static
+	
+	This will overwrite existing files!
+	Are you sure you want to do this?
 
-	DJANGO_ALLOWED_HOSTS="host locale,127.0.0.1"
+	Type 'yes' to continue, or 'no' to cancel: yes
 
-Quando eseguiamo la distribuzione su un server virtuale ospitato, utilizzeremo i nomi di dominio che abbiamo scelto per il nostro sito.
+	179 static files copied to '/var/www/agenziaweb/static'.
 
-Possiamo ora salvare il nostro file production.conf e tornare ad occuparci del file \AGENZIA\AGENZIA01\wsgi.py
+Chiaramente al termine dell'elaborazione in  /var/www/agenziaweb/static  troveremo i contenuti statici del nostro sito.
+
+
+Opzioni di configurazione di Gunicorn
+------------------------------------- 
+
+Quella trattata in questo paragrafo è un'introduzione ad una documentazione più ampia che è possibile consultare su:
+
+	https://docs.gunicorn.org/en/stable/deploy.html
+
+Gunicorn ha molte opzioni che possono essere utilizzate per configurarne l'esecuzione e può essere adattato alla configurazione del nostro server; queste possono essere inserite in un file di configurazione o tramite flag sulla riga di comando e noi useremo il primo metodo.
+
+Un'opzione di configurazione comune da impostare è il numero di processi di lavoro necessari all'avvio; se il server ha più CPU o core, può chiaramente gestire più lavoratori senza sovraccaricarsi, ma in generale, questo dovrebbe tradursi in due a quattro lavoratori per ciascuna CPU core.
+
+Per il nostro sito useremo una configurazione Gunicorn semplice, mentre si rimanda alla documentazione Gunicorn (in appendice) per approfondire come scegliere le impostazioni in base al tipo dell'applicazione che si sta servendo e la configurazione del proprio server. 
+
+In linea generale per fare in modo che Gunicorn gestisca un'applicazione Django si usa un'unica riga di comando del tipo:
+
+	$ gunicorn gunicorn agenziaweb.wsgi:application
+
+Dato che Gunicorn è installato nell'ambiente virtuale, potremmo eseguire subito questo comando e avere un server WSGI in esecuzione; il problema è che si chiuderebbe subito dopo aver disconnesso la nostra sessione SSH.
+
+Per risolvere questo problema, è necessario configurare Gunicorn per l'esecuzione come SERVIZIO. 
+
+Su Ubuntu i servizi sono gestiti da un software chiamato  systemd  (vedasi appunti Linux), che è gestibile tramite un file di configurazione; tramite esso è possibile determinare per systemd la modalità di avvio dei servizi, per esempio quali sono gli utenti che eseguono il server, quali variabili di ambiente debbano essere impostate, come gestire gli arresti anomali (ovvero se il servizio debba essere riavviato automaticamente) e in quale ordine viene avviato il servizio (per rispettare la dipendenza tra servizi).
+
+Il gestore di servizi systemd ha tre tipi di file di configurazione: i sevice, i socket e i target:
+
+	• Un file service è rappresentato da uno o più processi in esecuzione
+	  come detto nel paragrafo precedente.
+	
+	• Un file socket è una rete o un socket che verrà ascoltato da systemd 
+	  e che avvia un servizio solo quando il socket ha attività.
+	  
+	• Un file target è un gruppo di servizi correlati fra loro. Può essere
+	  usato per impostare dipendenze in modo che i servizi di destinazione
+	  non vengano avviati fino a quando il target da cui dipendono è pronto.
+
+Per impostare Gunicorn, avremo solo bisogno di scrivere un file di servizio e un file socket.
+
+Il file di servizio va salvato come ...
+
+	/etc/systemd/system/gunicorn-agenziaweb.service 
+
+
+... e conterrà il codice che andiamo a commentare:
+
+	[Unit]
+	Description=Agenziaweb Gunicorn daemon
+	Requires=gunicorn-agenziaweb.socket
+	After=network.target
+
+	[Service]
+	EnvironmentFile=/home/agenziaweb/AGENZIAW/production.conf
+	Type=notify
+	User=agenziaweb
+	Group=agenziaweb
+	RuntimeDirectory=gunicorn-agenziaweb
+	WorkingDirectory=/home/agenziaweb/AGENZIAW
+	ExecStart=/home/agenziaweb/awebenv/bin/gunicorn agenziaweb.wsgi:application
+	ExecReload=/bin/kill -s HUP $MAINPID
+	KillMode=mixed
+	TimeoutStopSec=5
+	PrivateTmp=true
+
+	[Install]
+	WantedBy=multi-user.target
+
+
+La sezione [Unit] contiene metadati sul servizio da avviare.
+
+	• Description  descrive il servizio per la diagnostica.
+	
+	• Requires  dice a systemd cosa richiede il nostro servizio; in questo 
+	  caso, deve avere il nostro socket configurato prima di avviarsi.
+
+	• After  fornisce informazioni su quando avviare il servizio; in questo
+	  caso, dovrebbe avviarsi dopo che si è attivata la rete.
+	  
+La sezione [Service] descrive come viene avviato il servizio.
+
+	• EnvironmentFile  è il file che contiene i dati di configurazione (le 
+	  variabili di ambiente) da caricare all'avvio del servizio.
+	  
+	• Type  specifica come viene avviato il processo e come comunica il suo
+	  stato a systemd.
+	  
+	• User e Group  specificano utente e gruppo che eseguirà il processo.
+	
+	• RuntimeDirectory  è il nome della directory in cui systemd memorizzerà
+	  informazioni sul processo in esecuzione, come il suo ID.
+	  
+	• WorkingDirectory  è la directory in cui il processo si avvierà (abbiamo
+	  scelto la directory del progetto di agenziaweb.
+	  
+	• ExecStart  imposta il comando effettivo che viene eseguito per avviare 
+	  il servizio. Noi forniamo il percorso completo verso gunicorn nel nostro
+	  ambiente virtuale e il percorso del modulo dell'applicazione WSGI.
+
+	• ExecReload dice a systemd quale comando eseguire per ricaricare il 
+	  servizio. In questo caso, farà la kill del processo usando il suo ID e 
+	  ne chiederà il riavvio.
+	  
+	• KillMode  e  TimeoutStopSec  specificano come il servizio viene 
+	  arrestato e quanto tempo systemd deve attendere prima di interromperlo 
+	  forzatamente.
+	  
+	• PrivateTmp  è un booleano che impostato su true, indica che il servizio 
+	  avrà una propria directory temporanea (/tmp) non condivisa con altri 
+	  servizi.
+	  
+La sezione [Install] specifica le proprietà che si applicano al momento dell'installazione del servizio. 
+
+	• WantedBy  specifica che il servizio è "ricercato" dal multi-user.target; 
+	  ciò significa che quando systemd carica la destinazione multiutente, 
+	  cioè sostanzialmente il sistema Linux normalmente avviato, dovrebbe 
+	  includere il nostro servizio.
+
+Nota che in tutto il file di configurazione abbiamo usato agenziaweb dove possibile, ad esempio, Requires=gunicorn-agenziaweb.socket e RuntimeDirectory=Gunicorn-agenziaweb. 
+
+In questo modo, possiamo ospitare più applicazioni Django (o qualsiasi applicazione WSGI) sullo stesso server creando una nuova configurazione file e sostituendo agenziaweb con il nome della nuova applicazione.
+
+Il prossimo passaggio è creare il file socket cui abbiamo fatto riferimento in gunicorn-bookr.service che va salvato come ...
+
+	/etc/systemd/system/gunicorn-agenziaweb.socket
+
+... e che andiamo ad esaminare:
+
+	[Unit]
+	Description=Agenziaweb Gunicorn Socket
+
+	[Socket]
+	ListenStream=/run/gunicorn-agenziaweb.sock
+	User=www-data
+	Mode=600
+
+	[Install]
+	WantedBy=sockets.target
+
+La sezione [Unit] funziona come nel file service.
+
+La sezione [Socket] descrive la configurazione del socket:
+
+	• ListenStream è il percorso del socket. Questo sarà il socket attraverso
+	  cui comunicheranno NGINX e Gunicorn; come vedremo, andremo ad impostare 
+	  lo stesso percorso nella configurazione NGINX.
+	  
+	• User è l'utente che "possiede" il socket ed è impostato su www-data 
+	  perché anche NGINX è gestito dall'utente www-data e scriverà sul socket.
+	  
+	• Mode è la modalità di accesso del socket e 600 significa che solo 
+	  www-data sarà in grado di leggere e scrivere dati; tutti gli altri 
+	  utenti non avranno accesso.
+	  
+Anche la sezione finale [Install] è simile al file di servizio.
+
+Dopo che i file di servizio e socket sono a posto, a systemd può essere detto di abilitare la configurazione con il seguente comando:
+
+	$ sudo systemctl enable --now gunicorn-agenziaweb.socket
+	
+Si noti che specifichiamo solo che il socket deve essere abilitato, ma dal momento che abbiamo la riga Requires=gunicorn-agenziaweb.socket nel file di servizio, il servizio sarà abilitato anche in fase di boot, quindi l'esecuzione di questo comando avvierà sia il servizio che la configurazione di systemd per avviare il servizio all'avvio.
+
+
+Configurazione di NGINX
+-----------------------
+
+Dopo l'avvio di Gunicorn, abbiamo ancora bisogno di un server Web che invii ad esso le richieste tramite proxy, e quindi è necessario configurare NGINX.
+
+Possiamo anzitutto considerare NGINX già configurato per essere eseguito come servizio, dato che di questa cosa se ne è occupata l'installazione (apt) e ciò significa che non dobbiamo configurare systemd per esso.
+
+Tuttavia è necessario scrivere un file di configurazione anche per NGINX; i file di configurazione NGINX sono archiviati nella directory /etc/nginx ed alcuni contengono impostazioni NGINX globali, come /etc/nginx/nginx.conf.
+
+Anche NGINX suddivide le configurazioni per siti specifici nei propri file e queste vengono archiviate in /etc/nginx/sites-available; viene fornito con un sito predefinito già impostato, configurato in /etc/nginx/sites-available/default.
+
+NGINX in realtà non legge dalla directory /etc/nginx/sites-available, ma da /etc/nginx/sites-enabled, che è una directory contenente symlink (collegamenti simbolici) che puntano ai file all'interno della directory ../sites-available.
+
+Se il target (il file o la directory a cui punta) viene eliminato, il collegamento simbolico esisterà ancora su disco, ma se si prova a leggere/scrivere nel percorso del collegamento simbolico, ci si imbatterà in un errore; al contrario, il collegamento simbolico può essere rimosso senza influire sul file di destinazione.
+
+Ad esempio, il file /etc/nginx/sites-enabled/default è un collegamento simbolico a /etc/nginx/sites-available/default; ciò viene fatto in modo che i siti possano essere disattivato e riattivati eliminando e ricreando i collegamenti simbolici, senza distruggere il file di configurazione originale.
+
+Ora daremo un'occhiata al file di configurazione NGINX che useremo e dal momento che è un file piuttosto lungo, lo analizzeremo per sezione.
+
+Le opzioni di configurazione sono raggruppate all'interno di parentesi graffe; il nome dell'impostazione è la prima parola sulla riga, mentre il suo valore è indicato dopo uno spazio; l'impostazione termina con un punto e virgola.
+
+Ad esempio, questa linea imposta il valore server_name su localhost:
+
+	server_name localhost;
+
+La prima parte della configurazione definisce un server "upstream", cioè un elenco nominale di server che possono essere utilizzati per gestire le richieste; l'upstream può essere configurato con un singolo server o un gruppo di server che gestiranno ciclicamente le richieste; useremo solo un server upstream, che nel il nostro caso si chiama "django":
+
+	upstream django {
+		server unix:/run/gunicorn-agenziaweb.sock fail_timeout=0;
+	}
+
+All'interno del gruppo di configurazione upstream, il nostro server è il socket che è usato per comunicare con Gunicorn; specificando fail_timeout=0, continueremo a utilizzare Gunicorn anche se viene generato un errore, viceversa, dopo un'eccezione nel nostro codice Python, dovremmo riavviare NGINX.
+
+Il prossimo blocco di configurazione è chiamato "server"; possiamo pensare a ogni blocco server come alla configurazione di un sito Web virtuale ospitato da NGINX; i server Web utilizzano l'header HTTP Host nella HTTP request per effettuare l'invio delle richieste.
+
+In genere avremmo un blocco server per ciascun host name che stiamo ospitando (sebbene sia possibile configurare un server che possa accettare più nomi, ad esempio "agenziaweb.com" e "www.agenziaweb.com")
+
+Il primo blocco server è abbastanza semplice ma chiarisce il concetto:
+
+	server {
+		listen 80 default_server;
+		return 444;
+	}
+
+Vogliamo che il server sia in ascolto sulla porta 80, mentre l'argomento default_server significa che questo server dovrebbe gestire qualsiasi nome host non gestito da altre definizioni di server.
+
+Tutto quello che fa questo server è restituire un HTTP 444, che è un codice speciale che indica a NGINX che dovrebbe semplicemente chiudere la connessione senza inviare alcun dato; questo per prevenire che client dannosi eseguano continue richieste di host non validi allo scopo di bloccare le risorse sul nostro server.
+
+Successivamente, esamineremo il blocco del server che servirà agenziaweb e lo faremo gradatamente:
+
+	server {
+		listen 80 deferred;
+
+Come prima ma con l'opzione deferred  che consente prestazioni migliori modificando la modalità di connessione che è accettata.
+
+	server_name localhost;
+
+E' il nome host a cui risponderà il server e dovrebbe corrispondere al nome host che abbiamo usato per connetterci al server, così come qualsiasi cosa sia in Django nella impostazione ALLOWED_HOSTS
+
+È possibile impostare più nomi host con spazi, per esempio...
+
+	server_name localhost 127.0.0.1;
+
+... mentre se si sta distribuendo il proprio sito su un server virtuale ospitato, questo sarà il nome (o i nomi) di dominio su cui abbiamo scelto di ospitare il nostro sito.
+
+	root /var/www/agenziaweb;
+
+root è la directory sul disco che NGINX considera essere la directory principale per il server e l'abbiamo impostato su /var/www/agenziaweb, quindi richiede un percorso come /static/logo.png verrà mappato al file /var/www/agenziaweb/static/logo.png.
+
+	client_max_body_size 4G;
+	keepalive_timeout 5;
+
+Queste due impostazioni hanno maggiore effetto sulla connessione HTTP; la dimensione predefinita per il caricamento  per NGINX è 1 MB; la prima impostazione, client_max_body_size, lo imposta invece su 4 GB; impostiamo anche keepalive_timeout su 5 secondi, quindi se non vengono trasferiti dati per 5 secondi la connessione sospesa verrà chiusa.
+
+	location / {
+		try_files $uri @proxy_to_django;
+	}
+
+All'interno di un blocco server, possiamo specificare regole diverse per posizioni diverse; avendo questa stanza che inizia con  "location /"  significa che le impostazioni verranno applicate all'intero sito – a meno che non siano sovrascritte da blocchi di posizione più specifici.
+
+L'opzione try_files dice a NGINX che per ogni richiesta, dovrebbe provare a caricare il file dal disco usando il suo percorso; se il file non viene trovato, dovrebbe cercare sulla locazione @proxy_to_django, che esamineremo a breve.
+
+Per utilizzare lo stesso esempio di prima, una richiesta a http://<nome host>/static/logo.png si troverà sul disco in /var/www/agenziaweb/static/logo.png e NGINX servirà direttamente il file. 
+
+Confrontiamo questo con una richiesta per http://<nome host>/libri/; NGINX verificherà la presenza del file  /var/www/agenziaweb/libri su disco, ma poiché non esiste, la richiesta verrà inoltrata alla posizione @proxy_to_django
+
+Ecco la configurazione per la posizione virtuale @proxy_to_django:
+
+		location @proxy_to_django {
+			proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+			proxy_set_header X-Forwarded-Proto $scheme;
+			proxy_set_header Host $http_host;
+			proxy_redirect off;
+			proxy_pass http://django;
+		}
+	}
+
+Dal momento che stiamo inoltrando la richiesta, dobbiamo aggiungere alcune intestazioni che Django altrimenti non riceverebbe, usando l'impostazione proxy_set_header. 
+
+L'intestazione  X-Forwarded-For  contiene l'indirizzo IP originale del client remoto; per noi è necessario aggiungerlo altrimenti Django vedrebbe solo le connessioni da un socket locale.
+
+X-Forwarded-Proto  è il modo tramite cui Django sa se è stato effettuato l'accesso al sito HTTP o HTTPS. 
+
+Infine,  Host  viene inoltrato invariato: sappiamo già che Django verifica questo rispetto all'impostazione ALLOWED_HOSTS.
+
+L'impostazione  proxy_redirect  definisce come reindirizzare al server proxy; dat che NON stiamo eseguendo un reindirizzamento al server upstream, ma stiamo solo passando la richiesta internamente, abbiamo impostato  proxy_redirect  su off. 
+
+L'ultima riga, proxy_pass, imposta dove viene inoltrata la richiesta; il valore http://django si riferisce al server upstream che è stato definito all'inizio del file.
+
+Per riassumere, le seguenti parti della configurazione sono le più importanti e forniscono anche una panoramica di come NGINX gestisce la richiesta:
+
+	• La definizione di un server upstream che contiene le informazioni su 
+	  Gunicorn e con quale socket collegarlo.
+
+	• Il blocco server, che definisce un indirizzo da ascoltare e da cui 
+	  accettare la connessione HTTP.
+
+	• L'impostazione del server root, che definisce il percorso su disco 
+	  da cui leggere i file statici.
+	  
+	• L'uso dell'opzione try_files: NGINX proverà prima a caricare il file 
+	  dal disco e se non esiste, ricadrà nella posizione specificata e 
+	  passerà lì la richiesta del file.
+	  
+	• La posizione virtuale (@proxy_to_django) specifica che dovrebbe essere
+	  utilizzato un server upstream – lo stesso che abbiamo specificato 
+	  all'inizio della configurazione.
+
+Dopo aver aggiornato la configurazione di NGINX, quest'ultimo deve essere ricaricato per leggere il file della nuova configurazione. Questo viene fatto usando il comando systemctl:
+
+	$ sudo systemctl reload nginx
+	
+Il comando systemctl è uno strumento di controllo del sistema che può avviare, arrestare e riavviare molti servizi
+sulla macchina, come negli esempi che seguono:
+
+	$ sudo systemctl stop gunicorn-agenziaweb
+	$ sudo systemctl start gunicorn-agenziaweb
+
+... rispettivamente interromperà ed avvierà il servizio gunicorn-agenziaweb.
+
+E' importante notare che gunicorn dovrebbe essere riavviato dopo aver apportato modifiche al codice Python, usando il nome del servizio che si è creato al riavvio, nel nostro caso, gunicorn-agenziaweb; mentre nessun servizio ha bisogno di essere riavviato se si sono cambiati solo file statici o modelli.
+
+
+Applicazione delle configurazioni
+---------------------------------
+
+Torniamo per un attimo alla macchina dove abbiamo sviluppato il nostro sito e apriamo il progetto con Pycharm; andiamo a creare nella root del nostro progetto un nuovo percorso che chiamiamo service-conf.
+
+	\AGENZIAW			(root del progetto)
+		\AGENZIAW		(progetto)
+		\agenziaweb		(app)
+		\service-conf
+
+Dentro questa nuova cartella andiamo a creare il service per gunicorn...
+
+	\AGENZIAW\service-conf\gunicorn-agenziaweb.service
+
+Se Pycharm chiede di associare l'estensione ".service", rispondiamo selezionando "Text".
+
+Inseriamo in gunicorn-agenziaweb.service il seguente contenuto (che poi è lo stesso che abbiamo commentato precedentemente):
+
+	[Unit]
+	Description=Agenziaweb Gunicorn daemon
+	Requires=gunicorn-agenziaweb.socket
+	After=network.target
+
+	[Service]
+	EnvironmentFile=/home/agenziaweb/AGENZIAW/production.conf
+	Type=notify
+	User=agenziaweb
+	Group=agenziaweb
+	RuntimeDirectory=gunicorn-agenziaweb
+	WorkingDirectory=/home/agenziaweb/AGENZIAW
+	ExecStart=/home/agenziaweb/awebenv/bin/gunicorn agenziaweb.wsgi:application
+	ExecReload=/bin/kill -s HUP $MAINPID
+	KillMode=mixed
+	TimeoutStopSec=5
+	PrivateTmp=true
+
+	[Install]
+	WantedBy=multi-user.target
+
+Salviamo e chiudiamo il file e andiamo a creare il file del socket nello stesso percorso (eventualmente dovremo anche associare l'estensione a Text) quindi \AGENZIAW\service-conf\gunicorn-agenziaweb.socket che avrà il seguente contenuto, anche questo già precedentemente visto:
+
+	[Unit]
+	Description=Agenziaweb Gunicorn Socket
+
+	[Socket]
+	ListenStream=/run/gunicorn-agenziaweb.sock
+	User=www-data
+	Mode=600
+
+	[Install]
+	WantedBy=sockets.target
+
+L'ultimo file da creare è  \AGENZIAW\service-conf\agenziaweb  (proprio così un nome senza estensione) ed inseriamo il seguente codice, anch'esso noto:
+
+	upstream django {
+		server unix:/run/gunicorn-agenziaweb.sock fail_timeout=0;
+	}
+	
+	server {
+		listen 80 default_server;
+		return 444;
+	}
+
+	server {
+		listen 80 deferred;
+
+		server_name localhost;
+
+		root /var/www/agenziaweb;
+
+		client_max_body_size 4G;
+		keepalive_timeout 5;
+
+		location / {
+			try_files $uri @proxy_to_django;
+		}
+
+		location @proxy_to_django {
+			proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+			proxy_set_header X-Forwarded-Proto $scheme;
+			proxy_set_header Host $http_host;
+			proxy_redirect off;
+			proxy_pass http://django;
+		}
+	}
+
+Dopo aver salvato questo file (pagina 49)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

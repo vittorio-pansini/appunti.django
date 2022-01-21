@@ -22,4 +22,10 @@ Bootstrap
 File statici
 	https://www.youtube.com/watch?v=r93g0_v9zDc
 	
-	
+Gunicorn
+	https://gunicorn.org
+	https://docs.gunicorn.org/en/latest/index.html#
+	https://docs.gunicorn.org/en/latest/settings.html
+	https://docs.gunicorn.org/en/stable/deploy.html
+
+
