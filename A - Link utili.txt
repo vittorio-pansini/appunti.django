@@ -28,4 +28,5 @@ Gunicorn
 	https://docs.gunicorn.org/en/latest/settings.html
 	https://docs.gunicorn.org/en/stable/deploy.html
 
-
+Installazione su digitalocean
+	https://www.youtube.com/watch?v=08yYjLGWzaM

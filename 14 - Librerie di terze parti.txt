@@ -1,0 +1,207 @@
+****************************************
+ 14 - Librerie di terze parti di Django
+      [1.0.0]
+****************************************
+
+In Django è possibile inserire una serie di librierie di terze parti che possono aggiungere extra features: vi sono librerie che possono migliorare l'autenticazione altre che gestiscono i pagamenti altre che consentono la modifica di immagini.
+
+Gli argomenti trattati in questo capitolo sono legati a doppio nodo con quelli relativi al capitolo in cui si svolge l'argomento della installazione di Django su Linux.
+
+Possiamo dire anzi che questo capitolo è indispensabile per il completamento del capitolo 15, perchè andremo a trattare due librerie in particolare, che verranno anche usate durante l'installazione su Linux nel prossimo capitolo:
+
+	django-configurations	è una libreria che consente di configurare Django 
+							usando classi col vantaggio della ereditarietà per
+							semplificare l'impostazione d'ambiente.
+	
+	dj-database-urls		consente di gestire una connessione al database 
+							attraverso una semplice url
+
+
+Variabili di ambiente e libreria django-configuration
+-----------------------------------------------------
+
+Quando si scrive un applicativo e si vuole registrare una determinato valore spesso è possibile utilizzare le cosiddette variabili ambiente.
+
+Queste variabili sono legate alla cella in cui viene eseguito l'applicativo, tuttavia possono essere utilizzate anche per impostare dei valori che altrimenti dovrebbero essere scritti all'interno di un file di testo e gestiti attraverso la sua lettura.
+
+Ecco come viene trattata una variabile di ambiente su Linux...
+
+	$ export VAR="Contenuto"
+	$ echo $VAR
+	Contenuto
+
+... e in Windows (dove è fondamentale NON lasciare spazi fra nome variabile segno di = e valore) ...
+
+	> set VAR=Contenuto
+	> echo %VAR%
+	Contenuto
+
+In Django O per meglio dire in Python la scrittura e lettura delle variabili di ambiente avviene rispettivamente attraverso i seguenti comandi:
+
+	os.environ.setdefault('NOME_VAR', 'VALORE_VAR')
+	os.environ.get('NOME_VAR')
+
+Naturalmente il codice che usa queste funzioni deve fare l'import di os.
+
+Uno degli usi più frequenti delle variabili di ambiente è sicuramente la configurazione Django quando il sito deve essere portato in produzione E per questo motivo noi utilizzeremo la libreria django-configurations.
+
+La libreria django-configurations cambia i file settings.py in modo che le impostazioni possano essere lette sotto forma di classe, quindi tutto viene letto come sottoclasse di configurations.Configuration 
+
+Ad esempio questo ci consentirà di impostare DEBUG a False; anziché scriverlo a mano lo andremo a ereditare direttamente dalla classe development; in questo modo la variabile DEBUG del nostro progetto quando sarà sul computer dove avviene lo sviluppo continuerà ad essere impostata a True mentre quando sarà spostata sul server, automaticamente erediterà la variabile d'ambiente e sarà impostata a False.
+
+Per prima cosa andiamo ad installare la libreria django-configurations tramite Pycharm (File/Settings/Project:...) oppure tramite pip ...
+
+	$ pip3 install django-configurations
+
+Il prossimo passo è quello di modificare i file settings.py dentro il pacchetto principale (nel nostro caso \AGENZIAW\AGENZIAW) e per prima cosa dobbiamo importare Configuration e values da configurations ...
+
+	from configurations import Configuration, values
+
+Ora tutta la configurazione che si trova già nel file deve diventare una classe; questo ci consentirà di gestire le impostazioni andando a creare delle classi alternative che potrebbero essere degli override della classe principale oppure ereditare e modificare alcuni dei parametri contenuti nella classe ereditata.
+
+Ad esempio andiamo a creare la classe Dev() che all'interno avrà DEBUG=True e poi successivamente andiamo a creare una seconda classe che chiameremo Prod(Dev) che eredita la classe dev ma che dentro ha DEBUG=True, quando andiamo ad utilizzare la classe Prod() e andremo ad ereditare tutto quello che ha già la classe Dev() ma con la differenza che debug sarà a False.
+
+A partire dalla riga subito successiva tutte le importa andiamo a creare la classe Dev() e poi andiamo a selezionare tutto il resto del testo che andiamo ad identare premendo Tab (su Pycharm e su gran parte degli editor di codice è possibile farlo con un'unica manovra):
+
+	import ....
+	...
+	class Dev(Configuration):
+		.....
+		.....
+	
+Andiamo a modificare ulteriormente questa classe appena creata per fare in modo che Lega le variabili di ambiente.
+
+Le seguenti righe sono da cercare e modificare all'interno della classe...
+
+	DEBUG = True
+
+	ALLOWED_HOSTS = []
+	
+... e ciascuna di loro diventa, rispettivamente ...
+	
+	DEBUG = values.BooleanValue(True)		# DJANGO_DEBUG
+
+	ALLOWED_HOSTS = values.ListValue([])	# DJANGO_ALLOWED_HOSTS
+
+Grazie Alle chiamate tramite padres siamo in grado di leggere le variabili di ambiente ad esempio in DEBUG siamo in grado di leggere la variabile di ambiente DJANGO_DEBUG mentre ALLOWED_HOSTS verrà valorizzata con la variabile di ambiente DJANGO_ALLOWED_HOSTS.
+
+Vedremo come valorizzare queste variabili di ambiente all'esterno del nostro progetto in modo che siano disponibili alla lettura da parte della nostra classe; i valori che si trovano tra parentesi a ciascuna chiamata sono i valori di default che vengono assunti se la variabile di ambiente non viene valorizzata.
+
+Abbiamo bisogno ora di creare una classe alternativa che erediti tutti i valori dalla classe Dev() ("develop") e imponga valori alternativi al proprio interno; questa classe la chiameremo Prod() ("production") ed andremo a mettere questa classe all'interno sotto quella principale:
+
+	class Prod(Dev):
+		DEBUG = False
+		SECRET_KEY = values.SecretValue()
+
+I valori all'interno di questa nuova classe sono degli overraid di quelli presenti nella classe ereditata.
+
+Per ora il nostro progetto non funzionerà se prima non facciamo alcune ulteriori modifiche; apriamo il file manage.py nel percorso del progetto principale (quindi \AGENZIAW\manage.py).
+
+All'interno di main() e subito sotto l'impostazione della variabile di ambiente "DJANGO_SETTINGS_MODULE", aggiungiamo:
+
+	os.environ.setdefault('DJANGO_CONFIGURATION', 'Dev')
+
+... che fa in modo da settare il valore di default della variabile di ambiente DJANGO_CONFIGURATION per fare in modo che sia considerata la classe Dev(); al momento opportuno questa variabile di ambiente, dall'esterno, potrà essere valorizzata con 'Prod' e quindi attivata la classe alternativa che abbiamo inserito prima.
+
+Commentiamo l'import esistente e sostituiamo il valore commentato con un nuovo import; l'import da sostituire si trova nel blocco try e non all'inizio.
+
+	try:
+		# from django.core.management import execute_from_command_line
+        from configurations.management import execute_from_command_line
+	....
+
+L'avvio senza errori del nostro progetto dovrebbe confermare che questa nostra modifica è andata a buon fine.
+
+
+La libreria dj-database-urls
+----------------------------
+
+Questa libreria consente di collegare il nostro progetto ad un database usando un semplice url al posto dei parametri di accesso al database.
+
+Similmente alla libreria django-configurations, anche questa può ricevere i parametri attraverso le varibili d'ambiente e quindi comportarsi in conseguenza della configurazione che viene preparata su una specifica macchina.
+
+Incominciamo con l'installazione della libreria  dj-database-urls  all'interno di Pycharm con i metodi già a noi noti o attraverso pip:
+
+	$ pip3 install dj-database-urls
+
+Il formato url che viene introdotto da questa libreria è del tipo...
+
+	{protocollo}://{user}:{password}@{hostname}:{porta}/{databasename}
+
+Le stringhe vanno modificate opportunamente, sostituendo "protocollo", "user", "password" e "databasename" rispettivamente con il nome del tipo di database, quello del superuser che accede al database, la sua password in chiaro e il nome del database; le stringhe sono configurate per usare un database installato sulla stessa macchina dove dovrà girare il sito, quindi localhost o 127.0.0.1, ma ciò non toglie che possa fare riferimento ad un'altra macchina interna (es. 192.168.xxx.xxx, mio.server.dei.database), le porte sono 5432 per PostgreSQL e 3306 per MySQL.
+
+Ecco due esempi, il primo su PostgreSQL, il secondo su MySQL:
+
+	"postgres://bookr:b00ks@192.168.1.150:5432/bookr_database"
+
+	"mysql://user:password@127.0.0.1:3306/databasename"
+
+Dato che i parametri del database sono conservati all'interno del file \AGENZIAW\AGENZIAW\settings.py andiamo proprio ad applicare la libreria al suo interno, incominciando dall'import:
+
+	import dj_database_urls
+
+Quindi cerchiamo dove è definita la variabile DATABASES, ad esempio potremmo avere un database basato su MySQL ...
+
+	DATABASES = {
+		'default': {
+			'ENGINE': 'django.db.backends.mysql',
+			'NAME': 'AgenziaWeb',
+			'HOST': '127.0.0.1',
+			'PORT': '3306',
+			'USER': 'agenziaweb',
+			'PASSWORD': 'Adm1nAw-2021!',
+		}
+	}
+
+... che mostra, purtroppo in chiaro, anche le credenziali di accesso alla base dati; ma arriveremo ad aggiustare la cosa a breve, per ora ci basta sapere che possiamo valorizzare la nostra variabile in questo modo:
+
+	DATABASES = {
+		'default':dj_database_urls.parse(
+			"mysql://agenziaweb:Adm1nAw-2021!@127.0.0.1:3306/AgenziaWeb"
+		)
+	}
+
+Un altro caso frequente è il database standard sqlite3 che presenta la variabile valorizzata in questo modo:
+
+
+	DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        }
+    }
+
+... e che andremo a valorizzare come ...
+
+	DATABASES = {
+		'default':dj_database_urls.parse(
+			"sqlite:///{}/:sqlite3".format(BASE_DIR)
+			)
+		)
+	}
+	
+Anche qui abbiamo messo la stringa della url a mano e ancora non è il massimo della funzionalità, ma per fortuna anche questa libreria si basa sulla variabili di ambiente.
+
+Per la precisione la variabile d'ambiente  DATABASE_URL  è quella gestita da dj-database-urls, pertanto, nel caso del database mysql, possiamo aver impostato tale variabile in linux come ...
+
+	$ export DATABASE_URL="mysql://agenziaweb:Adm1nAw-2021!@127.0.0.1:3306/AgenziaWeb"
+
+... o in Windows ...
+
+	> set DATABASE_URL=mysql://agenziaweb:Adm1nAw-2021!@127.0.0.1:3306/AgenziaWeb
+
+... e questa sarà perfettamente disponibile nella chiamata che possiamo reimpostare come ...
+
+	DATABASES = {'default':dj_database_urls.config()}   # DATABASE_URL
+
+... o in modo ancora più conciso (considerando l'import di values del paragrafo precedente) ...
+
+	DATABASES = values.DatabaseURLValue()
+
+... che costruisce per noi la struttura {'default': ...}
+
+Il primo metodo è però da preferire perchè ci consente di passare, come parametro, una stringa di configurazione alternativa, nel caso in cui il database non venga trovato o non venga agganciato:
+
+	DATABASES = {'default':dj_database_urls.config("mysql://.........")}
+
+Ricordiamo che possiamo sempre gestire la variabile in override fra la configurazione "development" e "production", lasciando tranquillamente una gestione "bucata" ma ininfluente sulla parte "development".

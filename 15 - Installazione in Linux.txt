@@ -1,10 +1,9 @@
 **********************************
  15 - Installazione in Linux
-      [0.0.1]
+      [1.1.0]
 **********************************
 
-Finora, abbiamo utilizzato il server di sviluppo Django per entrambi eseguire il codice Python e servire i file statici e multimediali, mentre in realtà ricordiamo che il server di sviluppo Django non è adatto per l'uso in produzione, non è progettato per eseguire più processi o gestire molti utenti, ma soprattutto, non viene eseguito
-quando l'impostazione DEBUG è impostata su True.
+Finora, abbiamo utilizzato il server di sviluppo Django sia per eseguire il codice Python sia per servire i file statici e multimediali, mentre in realtà ricordiamo che il server di sviluppo Django non è adatto per l'uso in produzione, non è progettato per eseguire più processi o gestire molti utenti, ma soprattutto, non viene eseguito quando l'impostazione DEBUG è impostata su True.
 
 Inizieremo questo capitolo esaminando l'architettura utilizzata in un web di produzione server, ovvero dove le funzioni del server di sviluppo Django vengono suddivise e gestite da DUE diverse applicazioni:
 
@@ -14,7 +13,7 @@ Inizieremo questo capitolo esaminando l'architettura utilizzata in un web di pro
 	
 Il frontend web server decide come deve essere gestita la richiesta; se è una richiesta per un file statico o multimediale, il frontend web server può gestire la richiesta stessa, cioè può semplicemente leggere e inviare il file.
 
-Se la richiesta è per codice specifico di Python, dovrà essere inoltrata al server application per la sua gestione; l'applicazione Django viene quindi fa il parse dell'URL e altri dati HTTP, genera un oggetto HttpRequest utilizzando una vista e invia la risposta al frontend web server, che a sua volta ritrasmette la risposta al browser.
+Se la richiesta è per eseguire un codice specifico di Python, dovrà essere inoltrata al server application per la sua gestione; l'applicazione Django fa quindi il parse dell'URL e di altri dati HTTP, genera un oggetto HttpRequest utilizzando una vista e invia la risposta al frontend web server, che a sua volta ritrasmette la risposta al browser.
 
 		+-----------+
 		|  browser  |
@@ -165,17 +164,17 @@ Per prima cosa andiamo a creare un utente speciale che è appunto Agenziaweb con
 
 	$ sudo adduser --disabled-password --shell /bin/false --gecos Agenziaweb agenziaweb
 
-	Adding user `agenziaweb' ...
-	Adding new group `agenziaweb' (1002) ...
-	Adding new user `agenziaweb' (1002) with group `agenziaweb' ...
-	Creating home directory `/home/agenziaweb' ...  
-	Copying files from `/etc/skel'...
+	Adding user 'agenziaweb' ...
+	Adding new group 'agenziaweb' (1002) ...
+	Adding new user 'agenziaweb' (1002) with group 'agenziaweb' ...
+	Creating home directory '/home/agenziaweb' ...  
+	Copying files from '/etc/skel'...
 
 L'opzione --disabled-password fa in modo da creare un utente che può accedere senza password; --shell indicherebbe la shell di default dell'utente, tuttavia avendo indicato /bin/false chiunque provi a loggarsi con questo utente verrebbe "buttato fuori" perchè non esiste alcuna shell di supporto (non è questo lo scopo dell'utente agenziaweb); con --gecos (General Electric Comprehensive Operating System) impostiamo il nome dell'utente "vero"; l'ultimo parametro è proprio il nome utente, agenziaweb.
 
 Come si vede dalla risposta, viene automaticamente creato anche il gruppo agenziaweb e una directory home per l'utente; li useremo entrabi tra poco.
 
-Possiamo controllare che l'utente si sia aggiunto a quelli del sistema con il comando ...
+Possiamo controllare che l'utente si sia aggiunto a quelli del sistema con ...
 
 	$ sudo less /etc/passwd
 
@@ -188,7 +187,6 @@ Andiamo a creare i percorsi ed assegnare i permessi.
 	$ sudo mkdir /var/www/agenziaweb
 	$ sudo mkdir /var/www/agenziaweb/static
 	$ sudo mkdir /var/www/agenziaweb/media
-
 	$ sudo chown agenziaweb:agenziaweb /var/www/agenziaweb
 	$ sudo chown agenziaweb:www-data /var/www/agenziaweb/static
 	$ sudo chown agenziaweb:www-data /var/www/agenziaweb/media
@@ -207,13 +205,43 @@ Con il comando chown [utente]:[gruppo] ... andiamo ad impostare l'utente e i gru
 	drwxr-x--- 2 agenziaweb www-data   4096 Jan 12 06:39 media
 	drwxr-x--- 2 agenziaweb www-data   4096 Jan 12 06:38 static
 
-Ora che i percorsi sono stati creati, accertiamoci siano correttamente configurati e per far questo interveniamo sul file  \AGENZIAW\agenziaweb\settings.py 
+
+Configurazione del file settings.py
+-----------------------------------
+
+Ora che i percorsi sono stati creati, accertiamoci siano correttamente configurati e per far questo interveniamo sul file  \AGENZIAW\agenziaweb\settings.py che abbiamo già modificato nel capitolo precedente, quando abbiamo applicato django-configurations e dj-database-url; se non lo abbiamo ancora fatto, è necessario eseguire prima quei passaggi.
+
+Se ancora attivo, commentiamo l'import di pathlib e accertiamoci di avere gli import seguenti:
+
+	# from pathlib import Path
+	from configurations import Configuration, values
+	import dj_database_url
+
+Quindi accertiamoci che BASE_DIR sia correttamente valorizzata:
+
+    # BASE_DIR = Path(__file__).resolve().parent.parent
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+... e che sia valorizzata nel gruppo TEMPLATES ...
+
+    TEMPLATES = [
+        {
+            ...
+            #'DIRS': [BASE_DIR / 'templates'],
+            'DIRS': [os.path.join(BASE_DIR, 'templates')],
+
+Controlliamo che il caricamento della stringa del database sia a posto; di seguito portiamo un ESEMPIO di come dovrebbe essere la riga che imposta il database MySQL di AgenziaWeb 
+
+	DATABASES = values.DatabaseURLValue("mysql://agenziaweb:Adm1nAw-2021!@localhost/AgenziaWeb",
+										 environ_prefix="DJANGO_")
+
+Come visto nel precedente capitolo, la stringa viene letta dalla variabile di ambiente, DATABASE_URL che noi abbiamo opportunamente manipolato mettendoci un prefisso e quindi verrà cercata DJANGO_DATABASE_URL
 
 Prima della definizione di STATICFILES_DIRS va definita ...
 
-	STATIC_ROOT = values.Value()
+	STATIC_ROOT = values.Value()	# DJANGO_STATIC_ROOT
 
-Questo farà leggere STATIC_ROOT dalla variabile di ambiente DJANGO_STATIC_ROOT , per impostazione predefinita torna vuota se non impostata.
+Questo farà leggere STATIC_ROOT dalla variabile di ambiente DJANGO_STATIC_ROOT, per impostazione predefinita torna vuota se non impostata.
 
 Ora modifichiamo l'impostazione di MEDIA_ROOT che attualmente è una stringa statica, da ...
 
@@ -223,19 +251,15 @@ Ora modifichiamo l'impostazione di MEDIA_ROOT che attualmente è una stringa sta
 
 	MEDIA_ROOT = values.Value(os.path.join(BASE_DIR, 'media'))
 
-Questo farà leggere MEDIA_ROOT dalla variabile di ambiente DJANGO_MEDIA_ROOT se è impostata, altrimenti ritorna il valore esistente.
+Questo farà leggere MEDIA_ROOT dalla variabile di ambiente DJANGO_MEDIA_ROOT se è impostata, altrimenti ritorna il valore "locale" \AGENZIAW\media.
 
 
 Creazione del file production.conf
 ----------------------------------
 
-Per usare le librerie di terze parti per Django, viene usata l'applicazione "django-configurations third-party" che consente di di usare classi per definire impostazioni differenti a seconda che si sia in modalità sviluppo (dev) o in modalità produzione.
+Come anticipato nel precedente capitolo, useremo le librerie di terze parti django-configurations e dj-database-url, che ci consentiranno di usare classi per definire impostazioni differenti a seconda che si sia in modalità sviluppo (dev) o in modalità produzione e di sfruttare le variabili di ambiente.
 
-# ndr si fa riferimento al capitolo 15 del libro #
-
-A tale scopo è necessario mettere mani al file  settings.py  che viene impostato per leggere alcune delle variabili dall'ambiente, mentre altre vengono codificate nel file stesso.
-
-Fra queste vi sono delle impostazioni che si rende necessario non siano accessibili dall'esterno ed esistono molti modi per farlo, fra cui anche l'uso di servizi esterni come etcd (https://etcd.io/), oppure è possibile memorizzarli da qualche parte nel proprio sistema; qualsiasi soluzione è valida, TRANNE quella di memorizzare valori e credenziali segreti nel file settings.py perchè si rischia di esporre accidentalmente dati relativi a credenziali per il controllo del codice sorgente verso l'esterno.
+Tra i parametri di impostazione del nostro sito, alcune si rende necessario NON siano accessibili dall'esterno (ad esempio le credenziali di accesso al database) ed esistono molti modi per farlo, fra cui anche l'uso di servizi esterni come etcd (https://etcd.io/), oppure è possibile memorizzarli da qualche parte nel proprio sistema; qualsiasi soluzione è valida, TRANNE quella di memorizzare valori e credenziali segreti nel file settings.py perchè si rischia di esporre accidentalmente dati relativi a credenziali per il controllo del codice sorgente verso l'esterno.
 
 Avendoli in un file separato, possiamo fare in modo che vengano ignorati dal tuo sistema di controllo del codice sorgente (ad esempio, aggiungendoli al file .gitignore), impedendone il caricamento.
 
@@ -249,34 +273,59 @@ Per il resto questo file può avere qualsiasi nome arbitrario ma facile da ricon
 
 ... ed inseriamo le seguenti righe al suo interno:
 
-	DJANGO_CONFIGURATION = "Prod"
-	DJANGO_SECRET_KEY = "EZaI^PksI6ISi7BkNxG=2yYiav*=#FN&g)7Of4gy@-VcSQkdU5"
+	DJANGO_CONFIGURATION="Prod"
+	DJANGO_SECRET_KEY="EZaI^PksI6ISi7BkNxG=2yYiav*=#FN&g)7Of4gy@-VcSQkdU5"
 	# PostgreSQL:
-	#  DJANGO_DATABASE_URL = "postgres://user:password@localhost/databasename"
-	#  DJANGO_DATABASE_URL = "postgres://user:password@127.0.0.1:5432/databasename"
+	#  DJANGO_DATABASE_URL="postgres://user:password@localhost/databasename"
+	#  DJANGO_DATABASE_URL="postgres://user:password@127.0.0.1:5432/databasename"
 	# MySQL:
-	#  DJANGO_DATABASE_URL = "mysql://user:password@localhost/databasename"
-	#  DJANGO_DATABASE_URL = "mysql://user:password@127.0.0.1:3306/databasename"
+	#  DJANGO_DATABASE_URL="mysql://user:password@localhost/databasename"
+	#  DJANGO_DATABASE_URL="mysql://user:password@127.0.0.1:3306/databasename"
 	DJANGO_STATIC_ROOT="/var/www/bookr/static"
 	DJANGO_MEDIA_ROOT="/var/www/bookr/media"
-	#  DJANGO_ALLOWED_HOSTS="192.168.1.23"
-	#  DJANGO_ALLOWED_HOSTS="localhost, 127.0.0.1"
+	#  DJANGO_ALLOWED_HOSTS="192.168.1.200"
+	#  DJANGO_ALLOWED_HOSTS="localhost,127.0.0.1"
 
-La prima riga che serve a dire a django-configurations quale classe di configurazione utilizzare, quindi semplicemente il valore "Prod" che sta per "Produzione".
+E' importante NON inserire spazi fra valore, segno "=" e argomento.
+
+La prima riga che serve a dire a django-configurations quale classe di configurazione utilizzare, quindi con il valore "Prod" verrà richiamata la classe Prod() che avevamo creato nel nostro file settings.py nel precedente capitolo.
 
 Nella seconda riga abbiamo impostato una chiave segreta, composta da una stringa casuale di 50 caratteri; possiamo produrre questa stringa in molti modi, uno di questi è quello di farla generare direttamente da Python, eseguendo dal terminale il seguente comando:
 
 	python3 -c "import django.utils.crypto; print(django.utils.crypto.get_random_string(50, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\!@#\$%^&*()-='))"
 	
-Se nel nostro progetto stiamo usando dei database (condizione normale, dato che SQLite3 NON può essere usato sul web, anche perchè non adatto), dobbiamo valorizzare DJANGO_DATABASE_URL usando uno dei due valori che qui sono presentati commentati.
-
-Le stringhe vanno modificate opportunamente, sostituendo "user", "password" e "databasename" rispettivamente con il nome del superuser che accede al database, la sua password in chiaro e il nome del database; le stringhe sono configurate per usare un database installato sulla stessa macchina dove dovrà girare il sito, quindi localhost o 127.0.0.1, ma ciò non toglie che possa fare riferimento ad un'altra macchina interna (es. 192.168.xxx.xxx, mio.server.dei.database), le porte sono 5432 per PostgreSQL e 3306 per MySQL.
+Se nel nostro progetto stiamo usando dei database (condizione normale, dato che SQLite3 NON può essere usato sul web, anche perchè non adatto), dobbiamo valorizzare DJANGO_DATABASE_URL usando uno dei due valori che qui sono presentati commentati, come abbiamo visto nel capitolo precedente, quando abbiamo parlato di questa libreria.
 
 Seguono le righe che indicano la posizione fisica delle directory /media e /static, che abbiamo preparato precedentemente.
 
-L'impostazione ALLOWED_HOSTS che segue è un elenco di IP e/o nomi di host che possono essere utilizzati per accedere al sito tramite SSH; presentiamo due esempi, nel primo indichiamo l'indirizzo IP di un computer di servizio, mentre nel secondo indichiamo come unico utilizzato l'host locale; si noti che è possibile indicare più indirizzi, dividendoli tramite virgola; quando eseguiamo la distribuzione su un server virtuale ospitato, utilizzeremo i nomi di dominio che abbiamo scelto per il nostro sito.
+L'impostazione ALLOWED_HOSTS che segue è un elenco di IP e/o nomi di host che possono essere utilizzati per accedere al sito tramite SSH; presentiamo due esempi, nel primo indichiamo l'indirizzo IP di un computer di servizio, mentre nel secondo indichiamo come unico utilizzato l'host locale; si noti che è possibile indicare più indirizzi, dividendoli tramite virgola (e senza spazi!); quando eseguiamo la distribuzione su un server virtuale ospitato, utilizzeremo i nomi di dominio che abbiamo scelto per il nostro sito.
+
+Comunque se non funziona l'export col metodo assunto prima (e come verificato nelle prove) è meglio "forzarne" il funzionamento con un batch più diretto che chiamiamo esporta.conf
+
+	export DJANGO_CONFIGURATION="Prod"
+	export DJANGO_SECRET_KEY="O%BU(ZY5vn9bFz5Zl1Kl4x4g4T2KDv$cWnA!SUWU8f)GX\PpB9"
+	export DJANGO_DATABASE_URL="mysql://agenziadbadm:A3en21aW36-2022!@localhost/AgenziaWeb"
+	export DJANGO_STATIC_ROOT="/var/www/agenziaweb/static"
+	export DJANGO_MEDIA_ROOT="/var/www/agenziaweb/media"
+	export DJANGO_ALLOWED_HOSTS="localhost,127.0.0.1"
+	echo Esportate le seguenti variabili:
+	echo DJANGO_CONFIGURATION = $DJANGO_CONFIGURATION
+	echo DJANGO_SECRET_KEY = $DJANGO_SECRET_KEY
+	echo DJANGO_DATABASE_URL = $DJANGO_DATABASE_URL
+	echo DJANGO_STATIC_ROOT = $DJANGO_STATIC_ROOT
+	echo DJANGO_MEDIA_ROOT = $DJANGO_MEDIA_ROOT
+	echo DJANGO_ALLOWED_HOSTS = $DJANGO_ALLOWED_HOSTS
+
+Attiviamone l'esecuzione ed eseguiamolo
+
+	()$ chmod 700 esporta.conf
+	()$ ./esporta.conf
 
 Le informazioni finora inserite possono essere sufficienti: salviamo e chiudiamo il file.
+
+Un'altra cosa che viene tenuta, per così dire segreta da testi e dal sito (e che è costata diverse ore di tentativi durante le prove) è che sia meglio creare questi file direttamente su Linux e non da Pycharm o da un editor di Windows.
+
+Questo perchè il formato adottato da Windows termina le righe con CR+LF anzichè con il solo CR, il che comporta dei problemi di troncamento a fine riga, non da poco.
 
 
 Modifica del file wsgi.py
@@ -366,7 +415,7 @@ Adesso switchiamo nell'utente agenziaweb e portiamoci nella sua home, dove adrem
 
 	$ sudo -H -u agenziaweb /bin/bash
 	$ cd
-	$ python3 -m virtaulenv --python=python3 awebenv
+	$ python3 -m virtualenv --python=python3 awebenv
 	
 	Already using interpreter /usr/bin/python3
 	Using base prefix '/usr'
@@ -376,8 +425,19 @@ Adesso switchiamo nell'utente agenziaweb e portiamoci nella sua home, dove adrem
 
 A questo punto installiamo tutti i pacchetti che abbiamo preparato nel file requirements.txt nei passaggi precedenti.
 
+----------------------------------------------------------------------------
+NOTA PER MySQL CLIENT
+
+Se si intende installare anche il client MySQL è FONDAMENTALE installare gli headers alle librerie che verranno usate da detto client e che vanno installate a parte PRIMA di lanciare l'installazione; dopo aver eventualmente fatto update e upgrade di apt, procedere con l'installazione tramite il seguente comando.
+
+	$ sudo apt install python3-dev default-libmysqlclient-dev build-essential
+
+Alcune delle installazioni sono "ripetitive", tuttavia è bene accertarsi che siano fra loro allineate quindi non è del tutto sbagliato rieseguirle.
+
+----------------------------------------------------------------------------
+
 	  $ source awebenv/bin/activate
-	()$ pip3 install -r bookr/requirements.txt
+	()$ pip3 install -r AGENZIAW/requirements.txt
 	.......
 
 Ora è possibile usare Django, ma prima è necessario esportare le impostazioni nell'ambiente del sistema operativo:
@@ -416,6 +476,10 @@ I prossimi passi consistono nell'eseguire la migrazione del database ...
 	179 static files copied to '/var/www/agenziaweb/static'.
 
 Chiaramente al termine dell'elaborazione in  /var/www/agenziaweb/static  troveremo i contenuti statici del nostro sito.
+
+A questo punto è possibile, se esistenti, caricare i dati sul proprio database, ad esempio con MySQL tramite Workbench.
+
+
 
 
 Opzioni di configurazione di Gunicorn
@@ -639,7 +703,7 @@ E' il nome host a cui risponderà il server e dovrebbe corrispondere al nome hos
 
 È possibile impostare più nomi host con spazi, per esempio...
 
-	server_name localhost 127.0.0.1;
+	server_name localhost 127.0.0.1 192.168.1.200;
 
 ... mentre se si sta distribuendo il proprio sito su un server virtuale ospitato, questo sarà il nome (o i nomi) di dominio su cui abbiamo scelto di ospitare il nostro sito.
 
@@ -807,28 +871,52 @@ L'ultimo file da creare è  \AGENZIAW\service-conf\agenziaweb  (proprio così un
 		}
 	}
 
-Dopo aver salvato questo file (pagina 49)
+Dopo aver salvato questo file dobbiamo trasferire la nuova cartella con i relativi file sul pc di destinazione, tramite FileZilla; colleghiamoci quindi con le stesse modalità viste precedentemente e poi procediamo a spostarli nelle relative destinazioni, come illustrato in precedenza.
+
+	$ cd /home/agenziaweb/AGENZIAW/service-conf
+
+	$ sudo mv gunicorn-agenziaweb.service /etc/systemd/system/
+	$ sudo mv gunicorn-agenziaweb.socket /etc/systemd/system/
+	$ sudo mv agenziaweb /etc/nginx/sites-available/
+
+	$ sudo chown root:root /etc/systemd/system/gunicorn-agenziaweb.service 
+	$ sudo chown root:root /etc/systemd/system/gunicorn-agenziaweb.socket
+	$ sudo chown root:root /etc/nginx/sites-available/agenziaweb
+
+	$ sudo chmod 644 /etc/systemd/system/gunicorn-agenziaweb.service 
+	$ sudo chmod 644 /etc/systemd/system/gunicorn-agenziaweb.socket 
+	$ sudo chmod 644 /etc/nginx/sites-available/agenziaweb	
+
+Abbiamo fatto in modo che sia root a poter leggere ed eseguire, mentre altri utenti/gruppi sono abilitati solo alla lettura.
+
+Bisogna ora eliminare la configurazione NGINX predefinita e collegare quella nuova nella directory sites-enabled. 
+
+In primo luogo, rimuoviamo quella di default, o meglio rimuoviamo il collegamento simbolico al default e andiamo a creare un nuovo collegamento simbolico al nostro sito:
+
+	$ sudo rm /etc/nginx/sites-enabled/default
+	$ sudo ln -s /etc/nginx/sites-available/agenziaweb /etc/nginx/sites-enabled/agenziaweb
+
+La creazione del un nuovo collegamento simbolico avviene con il comando ln (link) usando il flag -s per indicare che si tratta di un collegamento simbolico; verrà creato un link simbolico "agenziaweb" nel percorso /etc/nginx/sites-enabled/ che punta al vero file che si trova in /etc/nginx/sites-available/
+
+Abilitiamo e registriamo infine i servizi Gunicorn...
+
+	$ sudo systemctl enable --now gunicorn-agenziaweb.socket
+
+	Created symlink /etc/systemd/system/sockets.target.wants/gunicorn-agenziaweb.socket 
+	B /etc/systemd/system/gunicorn-agenziaweb.socket.
+
+... e andiamo a ricaricare NGINX per attivare la configurazione ...
+
+	$ sudo systemctl reload nginx
 
 
+Era l'ultimo passaggio. Non rimane che verificare che Agenziaweb sia attivo e funzionante sul nostro server.
 
+Da un'altra postazione apriamo un browser e digitiamo il seguente indirizzo nell'Url:
 
+	http://192.168.1.200
 
+Se tutto è andato a buon fine, avremo finalmente il nostro sito in esecuzione sul browser.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Oltre a verificare il corretto funzionamento del sito, è da verificare anche che il riavvio del sistema operativo faccia correttamente avviare i servizi NGINX e Gunicorn che abbiamo inserito nel restart.
 

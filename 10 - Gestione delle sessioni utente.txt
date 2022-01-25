@@ -1,0 +1,215 @@
+*************************************
+ 10 - Gestione delle sessioni utente
+      [0.0.0]
+*************************************
+
+Dovendo pubblicare un sito su Internet è chiaro che non si può lasciare che l'applicazione venga aperta e utilizzata da chiunque; È per questo che è necessario implementare all'interno del sito une funzione di login logout e di autenticazione.
+
+La app authentication Fornisce a jango i modelli per rappresentare utenti gruppi e i permessi; fornisce inoltre il middleware, delle utility, dei decoratori e mixins che consentono di implementare facilmente questo tipo di funzionalità nella propria app.
+
+Gli utenti sono gestiti singolarmente oppure assegnati a specifici gruppi.
+
+Oltre alla gestione delle view e dei template che abbiamo visto nei primi capitoli, un'altra funzionalità che gioca una ruolo estremamente importante è il middleware; in Django il middleware si riferisce a una varietà di software e componenti che interviene di questa specie di richiesta/risposta ed integra importanti funzionalità come la sicurezza, la gestione delle sessioni e l'autenticazione.
+
+I middleware vengono creati nel momento esatto in cui viene creato il progetto e finiscono nel solito file settings.py
+
+	MIDDLEWARE = [
+		'django.middleware.security.SecurityMiddleware',
+		'django.contrib.sessions.middleware.SessionMiddleware',
+		'django.middleware.common.CommonMiddleware',
+		'django.middleware.csrf.CsrfViewMiddleware',
+		'django.contrib.auth.middleware.AuthenticationMiddleware',
+		'django.contrib.messages.middleware.MessageMiddleware',
+		'django.middleware.clickjacking.XFrameOptionsMiddleware',
+	]
+
+Questi vengono eseguiti esattamente nell'ordine in cui compaiono nella lista MIDDLEWARE.
+
+	• SecurityMiddleware fornisce miglioramenti di sicurezza comuni come 
+	  gestione dei reindirizzamenti SSL e aggiunta di intestazioni di 
+	  risposta per prevenire gli attacchi più comuni.
+
+	• SessionMiddleware consente il supporto della sessione e associa 
+	  adeguatamente la sessione memorizzata con il request corrente.
+	  
+	• CoramonMiddleware implementa molte funzionalità, come rifiutare 
+	  le richieste dall'elenco DISALLOWED_USER_AGENTS, implementare le
+      regole di riscrittura degli URL e impostare l'intestazione 
+	  Content-Length.
+
+	• CsrfViewMiddleware aggiunge protezione contro il cross-site 
+	  request forgery (CSRF), di cui abbiamo già parlato.
+	  
+	• AuthenticationMiddleware aggiunge l'attributo utente all'oggetto 
+	  request.
+
+	• MessageMiddleware aggiunge il supporto per i messaggi "flash".
+
+	• XFrameOptionsMiddleware protegge dagli attacchi X-Frame-Options
+	  clickjacking. 
+	 
+I moduli middleware vengono caricati nell'ordine in cui appaiono nell'elenco MIDDLEWARE e questo ha senso perché vogliamo chiamare prima il middleware che si occupa dei problemi di sicurezza iniziali in modo che le richieste pericolose vengano rifiutate prima che si verifichi un'ulteriore elaborazione.
+
+Django include anche molti altri moduli middleware che svolgono funzioni importanti, come l'utilizzo della compressione dei file gzip, la configurazione del reindirizzamento e la configurazione della cache web.
+
+È possibile scrivere un progetto Django senza questi livelli dello stack del middleware se un progetto non richiede l'autenticazione dell'utente o un mezzo per preservare lo stato delle interazioni individuali, tuttavia, la maggior parte del middleware predefinito svolge un ruolo importante nella sicurezza delle applicazioni.
+
+Se non si dispone di una buona ragione per modificare i componenti del middleware, è meglio mantenere queste impostazioni iniziali; in effetti, l'app di amministrazione richiede l'esecuzione di SessionMiddleware, AuthenticationMiddleware e MessageMiddleware e il server Django genererà errori come questi se l'app di amministrazione è installata senza di essi.
+
+Abbiamo già incontrato il modulo di accesso sull'app Admin e questo è il punto di ingresso dell'autenticazione per gli utenti del personale che hanno accesso all'app di amministrazione. 
+
+Abbiamo anche bisogno di creare una funzionalità di accesso per gli utenti ordinari che desiderano accedere; rortunatamente, l'app authentication viene fornita con gli strumenti per renderlo possibile; inoltre man mano che elaboreremo i moduli e le visualizzazioni dell'app authentication, riscontreremo molta flessibilità nella sua implementazione: possiamo implementare le nostre pagine di accesso, definire politiche di sicurezza molto semplici o a grana fine a livello di visualizzazione e autenticarsi attraverso autority esterne.
+
+L'app di autenticazione esiste per adattarsi a molti approcci diversi all'autenticazione in modo che Django non applichi rigidamente un singolo meccanismo e per un utente che incontra per la prima volta la documentazione, questo può essere piuttosto sconcertante; ma per la maggior parte dell'argomento trattato, seguiremo le impostazioni predefinite di Django, con accenno ad alcune importanti opzioni di configurazione.
+
+L'oggetto  settings  di un progetto Django contiene attributi per il comportamento del login; LOGIN_URL specifica l'URL della pagina di accesso, e il suo valore predefinito è "/accounts/login/", mentre URL_REDIRECT_ACCESS specifica il percorso su cui viene reindirizzato un accesso riuscito e il suo valore predefinito è "/accounts/profile/".
+
+L'app di autenticazione fornisce moduli e viste standard per l'esecuzione delle attività di autenticazione tipiche e si trovano in django.contrib.auth.forms mentre le view sono in django.contrib.auth.views.
+
+Tutte le viste sono referenziate dai seguenti pattern URL presenti in django.contrib.auth.urls :
+
+	urlpatterns = [	
+		path('login/',  views.LoginView.as_view(),  name='login'),
+		path('logout/', views.LogoutView.as_view(), name='logout'),
+		path('password_change/', 
+			 views.PasswordChangeView.as_view(), name='password_change'),
+		path('password_change/done/', 
+			 views.PasswordChangeDoneView.as_view(), 
+			 name='pasword_change_done'),
+		path('password_reset', 
+			 views.PasswordResetView.as_view(), name='password_reset'),
+		path('pasword_reset/done/'  
+			 views.PasswordResetDoneView.as_view(), 
+			 name='password_reset_done'),
+		path('reset/<uidb64>/token7',
+			 views.PasswordResetConfirmView.as_view(), 
+			 name='password_reset_confirm'),
+		path('reset/done/',  
+			 views.PasswordResetCompleteView.as_view(), 
+			 name='password_reset_complete'),
+	]
+
+Sono tutte view basate su classi e comunque sono tutte pronte per essere già incluse nel nostro progetto.
+
+Per provare se funziona il nostro login, andiamo a creare un nuovo progetto con Pycharm che chiamiamo TestSessione, poi ci andiamo a buttare dentro una app che chiamiamo applicazione, poi una pagina iniziale che chiamiamo home.html, con una view che va a chiamare questa pagina con path a "".
+
+Il progetto dovrà gestire i template, pertanto prepariamoci un file base.html e accertiamoci che home erediti il template base (eventualmente sfruttando anche bootstrap).
+
+Prima di procedere, accertiamoci che funzioni tutto, avviando l'applicazione.
+
+Il primo passo è quello di inserire il form di login nel nostro progetto, copiandolo dai template che sono già presenti nella cartella di django; sono pagine html predefinite che sfruttano i template anche essi gestiti all'interno di django ecco un breve elenco di come dovranno essere posizionati all'interno del nostro progetto:
+
+	templates/registration/login.htm1 
+	templates/registration/password_reset_email.html 
+	templates/registration/password_change_form.html 
+	templates/registration/password_change_done.html 
+	templates/registration/password_reset_form.html 
+	templates/registration/password_reset_done.html 
+	templates/registration/password_reset_confirm.html 
+	templates/registration/password_reset_complete.html 
+	templates/registration/logged_out.html 
+
+Si trovano tutte all'interno del percorso creato eventualmente da VirtualEnv e per brevità chiameremo questo percorso {VE}.
+
+Andiamo a creare la cartella  registration  dentro TestSessione/templates e copiamo il file ...
+
+	{VE}/Lib/site-packages/django/contrib/admin/templates/admin/login.htm1
+
+... in ...
+
+	TestSessione/templates/registration/login.htm1 
+
+Apriamo il file e modifichiamo l'extend  in {% extends "base.html" %}
+
+Cancelliamo tutti i blocchi che fra {% load i18n static %} e {% block content %}
+
+Cercare la linea ...
+
+	<form action="{{ app_path }}" method="...
+
+... che modifichiamo in ...
+
+	<form action="{% url 'accounts:login' %}" method="...
+
+... dato che NON gestiamo la variabile app_path.
+
+Più sotto allo stesso modo sostituiamo ...
+
+	{% url 'admin_password_reset' as password_reset_url %}
+
+... con ...
+
+	{% url 'accounts:password_reset' as password_reset_url %}
+
+Non ci resta che includere gli url che attivano i form di gestione sessione, facendo l'include degli url descritti prima; apriamo urls.py del progetto principale e poniamo in testa la include:
+
+	from django.urls import path, include  # <- aggiungere 
+	
+	urlpatterns = [
+		path('accounts/', include( ('django.contrib.auth.urls', 'auths'),
+									namespace='accounts'
+								 )
+			),
+		......
+	]
+
+A questo punto dovremmo avere il form di login già funzionante all'url {% url 'accounts:login' %} o all'indirizzo ...
+
+	http://127.0.0.1:8000/accounts/login/
+
+Possiamo procedere a copiare e modificare allo stesso modo (testandoli) i restanti file a seconda di come vogliamo impostare il funzionamento del nostro sito:
+
+	templates/registration/password_reset_email.html 
+	templates/registration/password_change_form.html 
+	templates/registration/password_change_done.html 
+	templates/registration/password_reset_form.html 
+	templates/registration/password_reset_done.html 
+	templates/registration/password_reset_confirm.html 
+	templates/registration/password_reset_complete.html 
+	templates/registration/logged_out.html 
+
+
+Pagina del profilo utente
+-------------------------
+
+Ora dobbiamo accompagnare l'infrastruttura della gestione delle credenziali facendo in modo che la pagina di login possa essere indirizzata all'url "/accounts/profile" che va creata a cura dell'autore del sito.
+
+Quando andiamo a confermare l'identità di un utente, viene creato un nuovo oggetto che si chiama  request.user ; se l'utente è autenticato, request.user assume il valore di un oggetto di tipo  "User"  mentre se NON è autenticato assume il valore dell'oggetto  "AnonymousUser" .
+
+Le password vengono inoltre filtrate da un algoritmo di crittografazione di cui parleremo in seguito.
+
+In questo modo possiamo usare i dati contenuti nell'oggetto per gestirli in una pagina di profilo utente, che andiamo a creare.
+
+Nelle view andiamo a creare una funzione che gestirà la pagina del profilo....
+
+	def profile(request):
+		return render(request, "profile.html")
+
+... la pagina html di riferimento ...
+
+	{% extends 'base.html' %}
+
+	{% block title %}Pagina del profilo{% endblock %}
+
+	{% block content %}
+		<h2>Profilo</h2>
+		<div>
+			<p>
+				Username: {{ request.user.username }} <br>
+				Nome: {{ request.user.first_name }} {{ request.user.last_name }}<br>
+				Data attivazione: {{ request.user.date_joined }} <br>
+				Email: {{ request.user.email }} <br>
+				Ultimo login: {{ request.user.last_login }} <br>
+			</p>
+		</div>
+	{% endblock %}
+
+... e la url che la attiva in urls.py ...
+
+	urlpatterns = [
+		...
+		path('accounts/profile/', applicazione.views.profile, name='profile'),
+		...
+	]
+
+Una volta avviato il progetto, dopo il login, verremo indirizzati sulla pagina dove verrà mostrato il profilo.
