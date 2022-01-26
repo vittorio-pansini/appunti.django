@@ -213,3 +213,69 @@ Nelle view andiamo a creare una funzione che gestirà la pagina del profilo....
 	]
 
 Una volta avviato il progetto, dopo il login, verremo indirizzati sulla pagina dove verrà mostrato il profilo.
+
+
+Uso dei decoratori
+------------------
+
+Ora che abbiamo imparato come consentire agli utenti ordinari di accedere al nostro progetto, possiamo scoprire come limitare i contenuti agli utenti autenticati. 
+
+Il modulo di autenticazione viene fornito con alcuni utili decoratori che possono essere utilizzati per proteggere le viste in base all'autenticazione o all'accesso dell'utente corrente.
+
+Tuttavia prima di proseguire abbiamo bisogno di comprendere il funzionamento dei decoratori, altrimenti il meccanismo spiegato successivamente può risultare molto ostico.
+
+
+
+cos'è un autenticatore.
+
+https://www.youtube.com/watch?v=v3m4W8geRgw
+
+
+
+
+
+
+
+Decoratori di autenticazione e reindirizzamento
+-----------------------------------------------
+
+
+
+
+
+
+
+
+
+Sfortunatamente, se, ad esempio, un utente di nome Alice dovesse disconnettersi da Bookr, la pagina del profilo continuerebbe a visualizzare e visualizzare dettagli vuoti. Invece che ciò accada, sarebbe preferibile che qualsiasi visitatore non autenticato fosse indirizzato alla schermata di accesso:
+L'app di autenticazione viene fornita con utili decoratori per aggiungere il comportamento di autenticazione alle viste Django. In questa situazione di protezione della nostra vista profilo, possiamo usare il decoratore login_required:
+Ora, se un utente non autenticato visita l'URL /accounts/profile,
+verranno reindirizzati a http: //localhost:8000/accounts/login/?next=/accounts/profile/.
+
+Questo URL porta l'utente all'URL di accesso. Il parametro successivo nelle variabili GET indica alla vista di accesso a dove reindirizzare dopo un accesso riuscito. Il comportamento predefinito consiste nel reindirizzare alla vista corrente,
+ma questo può essere sovrascritto specificando l'argomento login un al decoratore richiesto per il login. Ad esempio, se avessimo avuto bisogno di reindirizzare a una pagina diversa dopo l'accesso, avremmo potuto dichiararlo esplicitamente nella chiamata del decoratore in questo modo:
+
+@login_required(login_uracounts/profile2')
+Se avessimo riscritto la nostra vista di accesso per aspettarci che l'URL di reindirizzamento fosse specificato in un argomento URL diverso da "successivo", potremmo spiegarlo nella chiamata del decoratore con l'argomento del nome del campo di reindirizzamento:
+
+@login richiesto(redirect Bald argument= redirect_t )
+Ci sono spesso situazioni in cui un URL dovrebbe essere limitato a utenti o gruppi che presentano una condizione specifica. Si consideri il caso in cui abbiamo una pagina in cui gli utenti dello staff possono visualizzare qualsiasi profilo utente. Non vogliamo che questo URL sia accessibile a tutti gli utenti,
+quindi vogliamo limitare questo URL a utenti o gruppi con l'autorizzazione "visualizza utente" e inoltrare le richieste non autorizzate all'URL di accesso:
+
+Quindi, con questo decoratore applicato alla nostra vista profilo_utente,
+un utente non autorizzato che visita http: //localhost:8000/accounts/users/123/profile/ verrebbe reindirizzato a http: //localhost:8000/accounts/login/?next=/accounts/users/123/profile/.
+
+A volte, però, abbiamo bisogno di strutturare permessi condizionali più sottili che non rientrano nell'ambito di questi due direttori. Per questo scopo,
+Django fornisce un decoratore personalizzato che accetta una funzione arbitraria come argomento. Il decoratore user_passes_test richiede un argomento test_func:
+Ecco un esempio in cui abbiamo una vista, veteran_features, disponibile solo per gli utenti registrati al sito da più di un anno:
+A volte la logica nelle nostre viste non può essere gestita con uno di questi decoratori e dobbiamo applicare il reindirizzamento all'interno del flusso di controllo della vista. Possiamo farlo usando la funzione helper redirect_to_login. Richiede gli stessi argomenti dei decoratori, come mostrato nel seguente snippet:
+Avendo appreso la flessibilità dei permessi dell'app di autenticazione e dei decoratori di autenticazione, ora inizieremo a utilizzarli nell'app Recensioni. Dobbiamo assicurarci che solo gli utenti autenticati possano modificare le recensioni e che solo gli utenti del personale possano modificare i publisher. Ci sono diversi modi per farlo,
+quindi tenteremo alcuni approcci. Tutto il codice in questi passaggi si trova nel file reviews/views.py:
+
+ 1. Il tuo primo istinto per risolvere questo problema sarebbe pensare che il metodo publisher_edit abbia bisogno di un decoratore appropriato per imporre che l'utente abbia il permesso di modificare l'editore. Per questo, potresti facilmente fare qualcosa del genere:
+
+ 2.
+L'uso di questo metodo va bene ed è un modo per aggiungere il controllo delle autorizzazioni a una vista. Puoi anche usare un metodo leggermente più complicato ma più flessibile.
+     Invece di utilizzare un decoratore di autorizzazioni per imporre i diritti di autorizzazione sul metodo publisher_edit,
+creerai una funzione di test che richiede un utente staff e applicherai questa funzione di test alla modifica dell'editore con l'utente che supera il decoratore di test. La scrittura di una funzione di test consente una maggiore personalizzazione su come convalidare i diritti di accesso o le autorizzazioni degli utenti. Se hai apportato modifiche al file .py delle visualizzazioni nel passaggio 1,
+sentiti libero di commentare il decoratore (o eliminarlo) e scrivi invece la seguente funzione di test:

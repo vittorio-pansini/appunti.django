@@ -88,3 +88,40 @@ Per risolvere o si rende la chiave usata primaria o si aggiunge in settings.py l
 	DEFAULT_AUTO_FIELD='django.db.models.AutoField'
 
 
+
+[.] Errori durante l'esecuzione del migrate con mySQL
+-----------------------------------------------------
+
+Nell'eseguire il migrate nell'ambiente production (capitolo 15) si verificano i seguenti errori:
+
+(.) Primo errore: 
+
+	Collecting mysqlclient==2.1.0
+	  Using cached mysqlclient-2.1.0.tar.gz (87 kB)
+		ERROR: Command errored out with exit status 1:
+		.......
+	ERROR: Command errored out with exit status 1: 
+		python setup.py egg_info Check the logs for full command output.
+
+Significa che bisogna installare django-mysql nell'ambiente virtuale di esecuzione.
+
+	()$ python -m pip install django-mysql
+
+
+(.) Secondo errore:
+
+	(awebenv) agenziaweb@ubuntu:~/AGENZIAW$ python3 manage.py migrate
+	Traceback (most recent call last):
+		......
+	' in module 'AGENZIAW':  module 'AGENZIAW.settings' has no attribute 'Prod
+
+Le variabili di ambiente sono state troncate; anzichè leggere 'Prod' (cioè aperti e chiusi apici) l'apice di chiusura è stato troncato; motivo: è stato generato il file di testo per passare le variabili di ambiente con Windows e poi è stato esguito in Linux.  Questa cosa NON funzionerà mai. Va creato file tutto nuovo DENTRO Linux e scritta riga per riga tutto il contenuto, altrimenti Linux tronca e fa casino con la lettura del file.
+
+
+(.) Terzo errore:
+
+	Traceback (most recent call last):
+		.......
+	django.db.utils.ProgrammingError: (1102, "Incorrect database name 'AgenziaWeb\r'")
+
+Stessa causa del secondo errore, solo che questa volta viene aggiunto "\r" il carrige return in più. Stessa soluzione.
