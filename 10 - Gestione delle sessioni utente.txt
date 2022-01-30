@@ -1,13 +1,13 @@
 *************************************
  10 - Gestione delle sessioni utente
-      [0.0.0]
+      [1.0.0]
 *************************************
 
 Dovendo pubblicare un sito su Internet è chiaro che non si può lasciare che l'applicazione venga aperta e utilizzata da chiunque; È per questo che è necessario implementare all'interno del sito une funzione di login logout e di autenticazione.
 
 La app authentication Fornisce a jango i modelli per rappresentare utenti gruppi e i permessi; fornisce inoltre il middleware, delle utility, dei decoratori e mixins che consentono di implementare facilmente questo tipo di funzionalità nella propria app.
 
-Gli utenti sono gestiti singolarmente oppure assegnati a specifici gruppi.
+Gli utenti sono gestiti singolarmente oppure assegnati a specifici gruppi e tutti i loro dati sono conservati nel database che si è scelto come infrastruttura per la loro memorizzazione e che viene creata la prima volta che eseguiamo la migrazione; ad esempio gli utenti sono memorizzati nella tabella auth_users.
 
 Oltre alla gestione delle view e dei template che abbiamo visto nei primi capitoli, un'altra funzionalità che gioca una ruolo estremamente importante è il middleware; in Django il middleware si riferisce a una varietà di software e componenti che interviene di questa specie di richiesta/risposta ed integra importanti funzionalità come la sicurezza, la gestione delle sessioni e l'autenticazione.
 
@@ -99,7 +99,7 @@ Prima di procedere, accertiamoci che funzioni tutto, avviando l'applicazione.
 
 Il primo passo è quello di inserire il form di login nel nostro progetto, copiandolo dai template che sono già presenti nella cartella di django; sono pagine html predefinite che sfruttano i template anche essi gestiti all'interno di django ecco un breve elenco di come dovranno essere posizionati all'interno del nostro progetto:
 
-	templates/registration/login.htm1 
+	templates/registration/login.html 
 	templates/registration/password_reset_email.html 
 	templates/registration/password_change_form.html 
 	templates/registration/password_change_done.html 
@@ -113,11 +113,11 @@ Si trovano tutte all'interno del percorso creato eventualmente da VirtualEnv e p
 
 Andiamo a creare la cartella  registration  dentro TestSessione/templates e copiamo il file ...
 
-	{VE}/Lib/site-packages/django/contrib/admin/templates/admin/login.htm1
+	{VE}/Lib/site-packages/django/contrib/admin/templates/admin/login.html
 
 ... in ...
 
-	TestSessione/templates/registration/login.htm1 
+	TestSessione/templates/registration/login.html 
 
 Apriamo il file e modifichiamo l'extend  in {% extends "base.html" %}
 
@@ -153,7 +153,11 @@ Non ci resta che includere gli url che attivano i form di gestione sessione, fac
 		......
 	]
 
-A questo punto dovremmo avere il form di login già funzionante all'url {% url 'accounts:login' %} o all'indirizzo ...
+A questo punto dovremmo avere il form di login già funzionante all'url 
+
+	{% url 'accounts:login' %} 
+
+... o all'indirizzo ...
 
 	http://127.0.0.1:8000/accounts/login/
 
@@ -196,7 +200,8 @@ Nelle view andiamo a creare una funzione che gestirà la pagina del profilo....
 		<div>
 			<p>
 				Username: {{ request.user.username }} <br>
-				Nome: {{ request.user.first_name }} {{ request.user.last_name }}<br>
+				Nome: {{ request.user.first_name }} 
+					  {{ request.user.last_name }}<br>
 				Data attivazione: {{ request.user.date_joined }} <br>
 				Email: {{ request.user.email }} <br>
 				Ultimo login: {{ request.user.last_login }} <br>
@@ -210,7 +215,6 @@ Nelle view andiamo a creare una funzione che gestirà la pagina del profilo....
 		...
 		path('accounts/profile/', applicazione.views.profile, name='profile'),
 		...
-	]
 
 Una volta avviato il progetto, dopo il login, verremo indirizzati sulla pagina dove verrà mostrato il profilo.
 
@@ -218,64 +222,717 @@ Una volta avviato il progetto, dopo il login, verremo indirizzati sulla pagina d
 Uso dei decoratori
 ------------------
 
-Ora che abbiamo imparato come consentire agli utenti ordinari di accedere al nostro progetto, possiamo scoprire come limitare i contenuti agli utenti autenticati. 
+Prima di proseguire con la trattazione è utile introdurre o reinfarinare il concetto dei decoratori, un costrutto molto usato ormai in quasi tutti i linguaggi di programmazione, e che andremo ad utilizzare a partire dal prossimo paragrafo.
 
-Il modulo di autenticazione viene fornito con alcuni utili decoratori che possono essere utilizzati per proteggere le viste in base all'autenticazione o all'accesso dell'utente corrente.
+In questo paragrafo considereremo non acquisita la conoscenza dei decoratori, pertanto ne faremo una introduzione graduale, incominciando dalla proprietà di Python (ma anche di altri linguaggi) di poter definire delle funzioni all'interno di altre funzioni, senza necessariamente passare dalle classi, come nell'esempio che segue:
 
-Tuttavia prima di proseguire abbiamo bisogno di comprendere il funzionamento dei decoratori, altrimenti il meccanismo spiegato successivamente può risultare molto ostico.
+	def parent():
+		def first_child():
+			print('Prima funzione figlia')
 
+		def second_child():
+			print('Seconda funzione figlia')
 
+		print('Funzione padre')
+		second_child()
+		first_child()
 
-cos'è un autenticatore.
+	parent()
 
-https://www.youtube.com/watch?v=v3m4W8geRgw
+Le funzioni first_child() e second_child() sono definite all'interno di parent() e sono private; se eseguiamo il codice otteniamo...
 
+	Funzione padre
+	Seconda funzione figlia
+	Prima funzione figlia
 
+La funzione parent() può restituire le funzioni interne come valore di ritorno; osserviamo il comportamento del seguente codice:
 
+	def parent(n):
+		def first_child():
+			print('Prima funzione figlia')
 
+		def second_child():
+			print('Seconda funzione figlia')
 
+		if n == 1:
+			return first_child
+		else:
+			return second_child
+
+	f = parent(1)
+	f()
+	parent(2)()
+
+... che produce il sguente output ...
+
+	Prima funzione figlia
+	Seconda funzione figlia
+
+Detto questo, possiamo ora creare una funzione my_decorator() che accetta come parametro una funzione; all'interno di my_decorator() vi sarà una funzione privata wrapper() che userà la funzione ricevuta come parametro, andando ad eseguire altro codice; il valore di ritorno di my_decorator() è proprio la funzione wrapper(); osserviamone l'esecuzione:
+
+	def my_decorator(funzione):
+		def wrapper():
+			print('Succede qualcosa prima')
+			funzione()
+			print('Succede qualcosa dopo')
+		return wrapper
+
+	def say_wee():
+		print('Whee!')
+
+	f = my_decorator(say_wee)
+	f()
+
+... con output ...
+
+	Succede qualcosa prima
+	Whee!
+	Succede qualcosa dopo
+
+Chiaramente possiamo fare in modo da chiamare ...
+
+	my_decorator(say_wee)()  
+
+... in modo più conciso; si noti l'uso delle parentesi sulla funzione f o sulla chiamata concisa appena descritta.
+
+Il prossimo esempio produce lo stesso output del precedente, ma usa proprio il decoratore:
+
+	def my_decorator(funzione):
+		def wrapper():
+			print('Succede qualcosa prima')
+			funzione()
+			print('Succede qualcosa dopo')
+		return wrapper
+
+	@my_decorator
+	def say_wee():
+		print('Whee!')
+
+	say_wee()
+
+Abbiamo "decorato" la funzione say_wee con @my_decorator (con la chiocciola che lo identifica): quando chiamiamo la funzione say_wee() il decoratore fa in modo che NON venga eseguita direttamente quest'ultima, ma my_decorator() cui viene passato say_wee() come parametro.
+
+In questo modo, ovunque, nel nostro codice, la chiamata a say_wee() subirà una modifica automaticamete, anzichè occuparsi di andare a sostituire tutte le chiamate ovunque sia necessario.
+
+Se abbiamo bisogno che la funzione wrapper gestisca dei parametri, dobbiamo cambiarla come nel prossimo esempio:
+
+	def my_decorator(funzione):
+		def wrapper(*args, **kwargs):
+			print('Succede qualcosa prima')
+			funzione(*args, **kwargs)
+			print('Succede qualcosa dopo')
+		return wrapper
+
+	@my_decorator
+	def say(parola):
+		print(parola)
+
+	say('Ciao mondo!')
+
+L'introduzione dei parametri posizionali e kwargs (*args, **kwargs) nel wrapper e poi all'interno della funzione che gestiamo come parametro del decoratore, ci consente di gestire qualsiasi tipo e numero di parametri passati da quella invocata.
+
+In ultimo osserviamo cosa accade se vogliamo sfruttare il valore ritornato dalla funzione invocata.
+
+	def my_decorator(funzione):
+		def wrapper(*args, **kwargs):
+			print('Succede qualcosa prima')
+			F = funzione(*args, **kwargs)
+			print('Succede qualcosa dopo')
+			return F
+		return wrapper
+
+	@my_decorator
+	def say(parola):
+		print(parola)
+		return "fine funzione"
+
+	print(say("ciao mondo"))
+
+... ottenendo il seguente output ...
+
+	Succede qualcosa prima
+	ciao mondo
+	Succede qualcosa dopo
+	fine funzione
+
+Abbiamo aggiunto alla funzione say un valore di ritorno che vogliamo stampare a video, cioè "fine funzione"; dopo aver messo il return dentro la funzione say, andiamo nella funzione wrapper e facciamo in modo da catturare il valore di ritorno di funzione() e fare in modo che esca dalla funzione wrapper (si noti la variabile F da noi usata).
+
+In ultimo, ma non meno importante, ricordiamo che su una funzione possiamo mettere più di un decoratore e ciascuno verrà implementato in cascata (sempre che siano tutti ben strutturati, come quelli implementati in Django).
 
 
 Decoratori di autenticazione e reindirizzamento
 -----------------------------------------------
 
+Tornando al nostro progetto, ora che abbiamo imparato come consentire agli utenti ordinari di accedere al nostro progetto, possiamo scoprire come LIMITARE i contenuti agli utenti autenticati e non autenticati.
+
+Il modulo di autenticazione di Django viene fornito con alcuni utili DECORATORI che possono essere utilizzati per proteggere le view in base all'autenticazione o all'accesso dell'utente corrente.
+
+Prima di incominciare, occorre predisporre il nostro sito di prova con quanto segue:
+
+1) Accertarsi di aver attivato un utente amministratore che per nostra comodità indichiamo con:
+
+	id:	administrator		pw:	basic2000
+	
+2) accediamo all'amministratore e andiamo a creare tre gruppi, senza aggiungere particolari risorse:
+
+	clienti			aziende			staff
+
+3) creiamo i seguenti utenti con le seguenti password, assegnando ciascuno al gruppo indicato e con l'utente vittorio che assume anche il ruolo di superuser; fra i privilegi utente sia teresa che vittorio devono possedere almeno "view_group".
+
+    vittorio        agosto1970      staff       superuser	view_group
+    teresa          aprile1971      staff					view_group
+    baciccio        ciccione30      clienti
+    nicoletti       acido100        clienti
+    stosa           siena200        aziende
+
+4) Aggiungiamo tre file html ai templates, copiandoli da home.html e riempiendoli con qualcosa che possa distinguerli a video quando saranno chiamati:
+
+	clienti.html	aziende.html	staff.html
+
+5) Nel file views.py aggiungere le view di ciascuna chiamata:
+
+	def clienti(request):
+		return render(request, "clienti.html")
+
+	def fornitori(request):
+		return render(request, "aziende.html")
+
+	def staff(request):
+		return render(request, "staff.html")
 
 
+6) Aggiungiamo i relativi url:
+
+    path('clienti/', applicazione.views.clienti, name='clienti'),
+    path('aziende/', applicazione.views.aziende, name='aziende'),
+    path('staff/', applicazione.views.staff, name='staff'),
+
+7) Infine nella pagina base aggiungiamo degli agganci alle pagine del tipo:
+
+	<a href="{% url 'clienti' %}">			Clienti	</a>
+	<a href="{% url 'aziende' %}">			Aziende	</a>
+	<a href="{% url 'staff' %}">			Staff	</a>
+	<a href="{% url 'accounts:login' %}">	Login	</a>
+	<a href="{% url 'admin:login' %}">		Admin	</a>
+	<a href="{% url 'profile' %}">			Profile	</a>
+
+Al momento tutte le pagine sono accessibili dall'esterno e, se fosse lasciata così non ci sarebbe alcun controllo sull'accesso da parte anche di utenti malintenzionati; Vediamo come applicare i filtri di accesso alle varie pagine.
 
 
+• Decoratore @login_required()	
+
+E' probabilmente il decoratore più importante: semplicemente non consente l'accesso ad una pagina se prima non abbiamo fatto il nostro login, dunque ne impedisce la visita agli utenti non autenticati.
+
+Se un utente, non autenticato, visita l'URL ...
+
+	http://localhost:8000/accounts/profile
+	
+... verrà reindirizzato su ...
+
+	http://localhost:8000/accounts/login/?next=/accounts/profile/
+
+... cioè all'URL di accesso. 
+
+Il parametro "next" nelle variabili GET indica la view di accesso dove reindirizzare l'utente dopo un accesso riuscito; per default si viene reindirizzati alla view corrente, ma possiamo definire un nostro valore, specificando il parametro  login_url  del decoratore come segue: 
+
+	from django.contrib.auth.decorators import login_required
+	....
+	@login_required(login_url='/accounts/profile2')
+	def profile(request):
+		....
+
+Se avessimo riscritto la nostra view di accesso aspettandoci che l'URL di reindirizzamento fosse specificata tramite argomento URL diverso da "next", potremmo indicarlo nella chiamata del decoratore con l'argomento  redirect_field_name :
+
+	....
+	@login_required(redirect_field_name='pagina_alternativa')
+	def profile(request):
+		....
 
 
+• Decoratore @permission_required()
+
+Ci sono spesso situazioni in cui una URL dovrebbe essere limitata a utenti o gruppi che presentano una condizione specifica, ad esempio si consideri il caso in cui abbiamo una pagina in cui gli utenti dello staff possono visualizzare qualsiasi profilo utente, ma non vogliamo che questo URL sia accessibile a tutti gli utenti; quindi vogliamo limitare questo URL a utenti o gruppi con l'autorizzazione "view_user" e inoltrare le richieste non autorizzate all'URL di accesso.
+
+Il primo metodo e il primo decoratore che vediamo è il permission_required; vogliamo fare in modo che siano solo gli utenti cui abbiamo impostato "can view group" nel loro profilo possano visualizzare la pagina con tutte le informazioni del profilo dell'utente, nel nostro caso solo gli utenti "vittorio" e "teresa".
+
+Apriamo views.py e accertiamoci di aver fatto l'import di nuovi metodi ...
+
+	from django.shortcuts import render, get_object_or_404, redirect
+	from django.contrib.auth.decorators import login_required, permission_required
+	from django.contrib.auth.admin import User
+
+... poi applichiamo il decoratore alla view user_profile_id(), una copia leggermente modificata della nostra precedente view ...
+
+	@permission_required('view_group')
+	def profile_id(request, uid):
+		user = get_object_or_404(User, id=uid)
+		permissions = user.get_all_permissions()
+		return render(request, "profile.html", {'user': user, 'permissions': permissions})
+
+... attivata dalla chiamata in urls.py ...
+
+	path('accounts/profile/<int:uid>/', applicazione.views.profile_id, name='profile_id'),
+
+... che a sua volta richiama la url (chiedendo di elaborare l'utente con id=2) ...
+
+	http://127.0.0.1:8000/accounts/profile/2/
+
+Quindi, con questo decoratore applicato alla nostra view, un utente non autorizzato, cioè un utente il cui valore 'auth.view_group' nel proprio record è False, verrebbe reindirizzato automaticamente su ...
+
+	http://localhost:8000/accounts/login/?next=/accounts/users/2/profile/
 
 
-Sfortunatamente, se, ad esempio, un utente di nome Alice dovesse disconnettersi da Bookr, la pagina del profilo continuerebbe a visualizzare e visualizzare dettagli vuoti. Invece che ciò accada, sarebbe preferibile che qualsiasi visitatore non autenticato fosse indirizzato alla schermata di accesso:
-L'app di autenticazione viene fornita con utili decoratori per aggiungere il comportamento di autenticazione alle viste Django. In questa situazione di protezione della nostra vista profilo, possiamo usare il decoratore login_required:
-Ora, se un utente non autenticato visita l'URL /accounts/profile,
-verranno reindirizzati a http: //localhost:8000/accounts/login/?next=/accounts/profile/.
+• Decoratore @user_passes_test(.)
 
-Questo URL porta l'utente all'URL di accesso. Il parametro successivo nelle variabili GET indica alla vista di accesso a dove reindirizzare dopo un accesso riuscito. Il comportamento predefinito consiste nel reindirizzare alla vista corrente,
-ma questo può essere sovrascritto specificando l'argomento login un al decoratore richiesto per il login. Ad esempio, se avessimo avuto bisogno di reindirizzare a una pagina diversa dopo l'accesso, avremmo potuto dichiararlo esplicitamente nella chiamata del decoratore in questo modo:
+Quando abbiamo bisogno di strutturare permessi condizionali più generici, Django fornisce il decoratore user_passes_test che consente di personalizzare il controllo di accesso tramite una funzione arbitraria passata come argomento.
 
-@login_required(login_uracounts/profile2')
-Se avessimo riscritto la nostra vista di accesso per aspettarci che l'URL di reindirizzamento fosse specificato in un argomento URL diverso da "successivo", potremmo spiegarlo nella chiamata del decoratore con l'argomento del nome del campo di reindirizzamento:
+Aggiungiamo user_passes_test all'import degli altri decoratori e scriviamo prima la funzione che dobbiamo passare come argomento...
 
-@login richiesto(redirect Bald argument= redirect_t )
-Ci sono spesso situazioni in cui un URL dovrebbe essere limitato a utenti o gruppi che presentano una condizione specifica. Si consideri il caso in cui abbiamo una pagina in cui gli utenti dello staff possono visualizzare qualsiasi profilo utente. Non vogliamo che questo URL sia accessibile a tutti gli utenti,
-quindi vogliamo limitare questo URL a utenti o gruppi con l'autorizzazione "visualizza utente" e inoltrare le richieste non autorizzate all'URL di accesso:
+	def is_staff_user(user):
+		return user.is_staff
 
-Quindi, con questo decoratore applicato alla nostra vista profilo_utente,
-un utente non autorizzato che visita http: //localhost:8000/accounts/users/123/profile/ verrebbe reindirizzato a http: //localhost:8000/accounts/login/?next=/accounts/users/123/profile/.
+... poi, come detto, aggiungiamo il decoratore passando la nostra funzione come parametro ...
 
-A volte, però, abbiamo bisogno di strutturare permessi condizionali più sottili che non rientrano nell'ambito di questi due direttori. Per questo scopo,
-Django fornisce un decoratore personalizzato che accetta una funzione arbitraria come argomento. Il decoratore user_passes_test richiede un argomento test_func:
-Ecco un esempio in cui abbiamo una vista, veteran_features, disponibile solo per gli utenti registrati al sito da più di un anno:
-A volte la logica nelle nostre viste non può essere gestita con uno di questi decoratori e dobbiamo applicare il reindirizzamento all'interno del flusso di controllo della vista. Possiamo farlo usando la funzione helper redirect_to_login. Richiede gli stessi argomenti dei decoratori, come mostrato nel seguente snippet:
-Avendo appreso la flessibilità dei permessi dell'app di autenticazione e dei decoratori di autenticazione, ora inizieremo a utilizzarli nell'app Recensioni. Dobbiamo assicurarci che solo gli utenti autenticati possano modificare le recensioni e che solo gli utenti del personale possano modificare i publisher. Ci sono diversi modi per farlo,
-quindi tenteremo alcuni approcci. Tutto il codice in questi passaggi si trova nel file reviews/views.py:
+	@user_passes_test(is_staff_user)
+	def profile(request):
+		return render(request, "profile.html")
 
- 1. Il tuo primo istinto per risolvere questo problema sarebbe pensare che il metodo publisher_edit abbia bisogno di un decoratore appropriato per imporre che l'utente abbia il permesso di modificare l'editore. Per questo, potresti facilmente fare qualcosa del genere:
+In questo esempio impediamo l'apertura della pagina del profilo a tutti gli utenti che NON sono individuati come appartenenti allo staff (flag disabilitato).
 
- 2.
-L'uso di questo metodo va bene ed è un modo per aggiungere il controllo delle autorizzazioni a una vista. Puoi anche usare un metodo leggermente più complicato ma più flessibile.
-     Invece di utilizzare un decoratore di autorizzazioni per imporre i diritti di autorizzazione sul metodo publisher_edit,
-creerai una funzione di test che richiede un utente staff e applicherai questa funzione di test alla modifica dell'editore con l'utente che supera il decoratore di test. La scrittura di una funzione di test consente una maggiore personalizzazione su come convalidare i diritti di accesso o le autorizzazioni degli utenti. Se hai apportato modifiche al file .py delle visualizzazioni nel passaggio 1,
-sentiti libero di commentare il decoratore (o eliminarlo) e scrivi invece la seguente funzione di test:
+
+Adeguamento di modelli ai dati di autenticazione
+------------------------------------------------
+
+In questa sezione, esamineremo l'applicazione della logica condizionale AI modelli in modo che gli utenti non vengano indirizzati a pagine di cui non dispongono di autorizzazione; infatti è sempre meglio fare in modo che le finestre siano adeguate all'utente che si è autenticato piuttosto che arrivare a far comparire delle finestre di errore o di negato accesso.
+
+In questo paragrafo andremo a far comparire o scomparire rispettivamente i link di login e di logout a seconda che l'utente abbia fatto o meno l'accesso.
+
+La prima cosa da fare è intervenire sul modello HTML "base" che si trova fra i template; In questo file andiamo ad individuare il punto in cui c'è il link del login e lo andiamo a modificare da una struttura tipo <ul>...</ul> come questa ...
+
+	<li class="nav-item">
+		<a class="nav-link" href="{% url 'accounts:login' %}">Login</a>
+	</li>
+	<li class="nav-item">
+		<a class="nav-link" href="{% url 'accounts:logout' %}">Logout</a>
+	</li>
+
+... ad una struttura del tipo ...
+
+	{% if not user.is_authenticated %}
+		<li class="nav-item">
+			<a class="nav-link" href="{% url 'accounts:login' %}">Login</a>
+		</li>
+	{% else %}
+		<li class="nav-item">
+			<a class="nav-link" href="{% url 'accounts:logout' %}">Logout</a>
+		</li>
+	{% endif %}
+
+Un altro effetto abbastanza comune (e che potrebbe essere ulteriormente migliorato, a seconda dell'uso) è quello di far comparire il nome (o altre informazioni) dell'utente collegato sulla barra delle applicazioni aggiungendo un blocco del genere al template di base:
+
+	{% if user.is_authenticated %}
+	<span class="text-light small ml-3">
+	  Utente: <br>{{ request.user.first_name }} {{ request.user.last_name }}
+	</span>
+	{% endif %}
+
+
+Le sessioni il motore di sessione
+---------------------------------
+
+Vale la pena esaminare alcune teorie per capire perché le sessioni sono una soluzione comune nelle applicazioni Web per la gestione dei contenuti degli utenti. 
+
+Il protocollo HTTP definisce le interazioni tra un client e un server e si dice che sia un protocollo "senza stato" poiché nessuna informazione con stato viene conservata dal server tra le richieste; questo progetto di protocollo ha funzionato bene per fornire informazioni ipertestuali nei primi giorni del World Wide Web, ma non si adattava alle esigenze delle applicazioni Web protette che fornivano informazioni personalizzate a utenti specifici; ora sappiamo invece che i siti Web si adattano alle nostre abitudini di visualizzazione personali.
+
+I siti di shopping consigliano prodotti simili a quelli che abbiamo visualizzato di recente e ci parlano di prodotti popolari nella nostra regione; tutte queste caratteristiche richiedevano un approccio stateful allo sviluppo del sito web. 
+
+Uno dei modi più comuni per implementare un'esperienza Web con stato è attraverso le sessioni. 
+
+Una sessione si riferisce all'interazione corrente di un utente con un server Web o un'applicazione e richiede che i dati vengano mantenuti per la durata dell'interazione; ciò può includere informazioni sui collegamenti che l'utente ha visitato, le azioni che ha eseguito e le preferenze che ha espresso nelle sue interazioni.
+
+Se un utente imposta un sito di blog su un tema scuro in una pagina, ci si aspetta che anche la pagina successiva utilizzi lo stesso tema; descriviamo questo comportamento come "mantainig state". 
+
+Una chiave di sessione viene memorizzata lato client come cookie del browser, che può essere identificato con informazioni lato server che persistono mentre l'utente è connesso.
+
+In Django, le sessioni sono implementate come una forma di middleware e quando si crea l'app, come abbiamo visto nei capitoli iniziali, il supporto alla sessione viene attivato per impostazione predefinita.
+
+
+Naturalmente le informazioni sulle sessioni correnti e scadute devono essere archiviate da qualche parte; agli albori del World Wide Web, ciò avveniva salvando le informazioni sulla sessione nei file sul server, ma poiché le architetture dei server Web sono diventate più elaborate e le loro richieste di prestazioni sono aumentate, si sono diffuse altre strategie più efficienti come l'uso di un database o l'archiviazione in memoria (in-memory storage). 
+
+Per impostazione predefinita, in Django, le informazioni sulla sessione sono archiviate del database del progetto.
+
+Questo è il contesto predefinito e ragionevole per la maggior parte dei piccoli progetti, tuttavia, l'implementazione del middleware delle sessioni di Django ci offre la flessibilità di archiviare le informazioni sulla sessione del nostro progetto in una varietà di modi differenti per soddisfare la nostra architettura di sistema e requisiti di prestazioni. Ognuna di queste diverse implementazioni è chiamata motore di sessione (session engine).
+
+Se vogliamo modificare la configurazione della sessione, dobbiamo specificare l'impostazione SESSION_ENGINE nel file settings.py del progetto scegliendo fra ...
+
+	• Cached sessions (sessioni memorizzate nella cache): in alcuni ambienti, la memorizzazione nella cache delle informazioni di sessione, in memoria o in un database, è un approccio adatto per ottenere prestazioni elevate; a tale scopo, Django fornisce i seguenti engine:
+		• django.contrib.sessions.backends.cache
+		• django.contrib.sessions.backends.cached_db
+
+	• File-based sessions (sessioni basate su file): come affermato in precedenza, questo è un modo un po' antiquato di mantenere le informazioni sulla sessione, ma può essere adatto ad alcuni siti in cui le prestazioni non sono un problema e vi sono motivi per non archiviare informazioni dinamiche in un database.
+
+	• Cookie-based sessions (sessioni basate sui cookie): invece di conservare le informazioni sulla sessione lato server, è possibile mantenerle interamente nel client del browser Web, serializzando il contenuto della sessione come JSON e memorizzandolo in un cookie basato sul browser.
+
+
+Informativa sui cookie e Django Simple Cookie Consent
+-----------------------------------------------------
+
+Tutte le implementazioni di sessioni di Django richiedono la memorizzazione di un ID sessione in un cookie sul browser web dell'utente. Indipendentemente dal motore di sessione utilizzato, tutte queste implementazioni middleware implicano la memorizzazione di un cookie specifico del sito nel browser web. All'inizio dello sviluppo web, non era raro passare gli ID di sessione come argomenti URL, ma questo approccio è stato evitato in Django per motivi di sicurezza.
+
+In molte giurisdizioni, inclusa l'Unione Europea, i siti Web sono legalmente tenuti ad avvisare gli utenti se il sito imposta cookie nei loro browser. Se ci sono tali requisiti legislativi nella regione in cui intendi gestire il tuo sito, è tua responsabilità assicurarti che il codice soddisfi questi obblighi. Assicurati di utilizzare implementazioni aggiornate ed evita di utilizzare progetti abbandonati che non hanno tenuto il passo con le modifiche legislative.
+
+Il Regolamento generale per la protezione dei dati personali 2016/679 (General Data Protection Regulation o GDPR) in 99 articoli e 173 “considerando” disciplina e armonizza la normativa europea in tema di data protection e privacy. Il Regolamento è stato pubblicato nella Gazzetta Ufficiale europea il 4 maggio 2016 ed è entrato in vigore il 25 maggio 2018. Da questa data l’adeguamento al GDPR è diventato perciò obbligatorio per tutti gli Stati membri dell’Unione Europea.
+
+Per soddisfare questi requisiti di cambiamento e legislativi (in realtà davvero INUTILI e maldestramente ideati da chi li ha poi imposti "a forza" alla comunità degli sviluppatori), ci sono molte app utili come "Django Simple Cookie Consent" e "Django Cookie Law", progettate per funzionare con molti frameworks legislativi.
+
+E' possibile trovare maggiori informazioni sui seguenti link:
+
+	https://pypi.org/project/django-simple-cookie-consent/
+	https://github.com/TyMaszWeb/django-cookie-law
+
+Esistono anche altri moduli JavaScript che implementano meccanismi di contenuto dei cookie simili a quelli indicati, tuttavia si è scelto di sviluppare l'uso di simple-cookie-consent.
+
+Per prima cosa, procuriamoci un link o creiamo noi stessi una pagina in cui andiamo a caricare una informativa sull'uso dei cookie, che è obbligatoria come detto e che andrà messa nei templates; la pagina, che chiameremo  "cookies.html"  dovrebbe contenere un testo del genere:
+
+	<!DOCTYPE html>
+	<html lang="it">
+	<head>
+		<meta charset="UTF-8">
+		<title>Cookie</title>
+	</head>
+	<body>
+		<h1>Informativa sull'uso dei cookie</h1>
+		<small>Informativa ai sensi del regolamento generale per la protezione
+			dei dati personali 2016/679 (General Data Protection Regulation o 
+			GDPR) in conformità della normativa europea in tema di data 
+			protection e privacy, pubblicato nella Gazzetta Ufficiale europea 
+			il 4 maggio 2016.</small>
+		<p> Un cookie è una piccola quantità di dati inviati al tuo browser da 
+			un server web e che vengono successivamente memorizzati sul disco 
+			fisso del tuo computer. Il cookie viene poi riletto e riconosciuto
+			dal sito web che lo ha inviato ogni qualvolta effettui una 
+			connessione successiva. Come parte dei servizi personalizzati per 
+			i suoi utenti, il nostro sito utilizza dei cookie per memorizzare 
+			e talvolta tenere traccia di alcuni dei dati personali forniti 
+			dagli utenti stessi.</p>
+		<p> Ti ricordiamo che il browser è quel software che ti permette di 
+			navigare velocemente nella Rete tramite la visualizzazione e il 
+			trasferimento delle informazioni sul disco fisso del tuo computer. 
+			Se le preferenze del tuo browser sono settate in modo da accettare
+			i cookie, qualsiasi sito web può inviare i suoi cookie al tuo
+			browser, ma – al fine di proteggere la tua privacy – può rilevare 
+			solo ed esclusivamente quelli inviati dal sito stesso, e non 
+			quelli invece inviati al tuo browser da altri siti.</p>
+		<p> Questo sito utilizza i cookies <u>esclusivamente tecnici</u>, che 
+			servono a far funzionare i meccanismi interni dello stesso; senza 
+			di essi questo applicativo web non può funzionare.</p>
+		<p> I dati personali dell'utente non verranno inviati ad altri enti o 
+			partners terzi, né verranno diffuse in alcun modo informazioni 
+			personali o dati di profilazione, salvo nei casi esplicitamente 
+			previsti dalla legge, come, ad esempio, dietro formale richiesta 
+			della magistratura, nell'ambito di indagini volte all'accertamento
+			di gravi e/o comprovate violazioni delle norme penali.</p>
+		<p> E' piena responsabilità dell'utente che accede a questo 
+			applicativo web informarsi sulle attuali normative e sulla 
+			gestione e custodia dei dati personali e sulle conseguenze civili
+			e penali relative alla violazione di tali normative o alla mancata
+			applicazione delle attività obbligatorie previste per la loro 
+			custodia.</p>
+		<p> L'autore del sito non è responsabile di violazioni da parte di 
+			clienti, fornitori o altri utenti che dovessero usare i dati 
+			gestiti dal presente applicativo web allo scopo di commettere 
+			illeciti in danno degli utenti o di terzi, anche indirettamente.
+			</p>
+		<p> Se non si ritengono sufficienti le informazioni contenute in questa
+			informativa o se non si intende accettare l'uso di cookie, essendo 
+			parte integrante del funzionamento del presente applicativo web, 
+			lo stesso applicativo non potrà funzionare, pertanto si invita a 
+			non effettuare l'accesso e rinunciare al suo uso. Viceversa 
+			l'accesso dell'utente, con proprie credenziali, implica 
+			<u>automaticamente</u> l'accettazione da parte dell'utente all'uso 
+			di tutti i cookie in esso presenti.</p>
+	</body>
+	</html>
+
+Quindi andiamo a creare una semplice view (non protetta da alcun decoratore, dato che deve essere perfettamente raggiungibile senza restrizioni) che chiameremo  cookies() dalla quale andiamo a renderizzare il nostro template ...
+
+	def cookies(request):
+		return render(request, "cookie.html")
+
+... quindi aggiungiamo l'url dedicato ...
+
+    path('cookies/', applicazione.views.cookies, name='cookies'),
+
+Facciamo il test della pagina per vedere se è raggiungibile, quindi andiamo ad installare la libreria simple consent con pip ...
+
+	()$ pip install django-simple-cookie-consent
+
+... o dall'interno di Pycharm (File/Settings/Project:... "+" ...).
+
+Aggiungiamo la relativa app in settings.py
+
+	INSTALLED_APPS = [
+		....
+		'django_simple_cookie_consent',
+		....
+		]
+
+Poi andiamo ad aprire il form base, quantomeno quello che viene chiamato per primo e aggiungere i seguenti tag in testa, poco prima dell'header e internamente all'header stesso:
+
+	...altri load esistenti
+	{% load django_simple_cookie_consent_tags %}
+	
+	<head>
+		...altri links/scripts esistenti
+		{% display_cookie_consent %}
+	</head>
+
+Per usare la libreria è necessario creare una voce nel database, ovvero il modello CookieConsentSettings; andiamo quindi ad eseguire la migrazione:
+
+	python manage.py migrate
+
+Bisogna valorizzare il record di gestione dei coockies; avviamo la nostra applicazione e la pagina dell'amministratore (che si pesume sia stata già abilitata) ...
+
+   http://127.0.0.1:8000/admin/ 
+   
+Qui notiamo che si è creato un nuovo gruppo "Cookie consent settingss"; andiamo a creare un nuovo oggetto (ovvero un nuovo record) e qui possiamo impostare una serie di elementi della nostra istanza, incluso aspetto e colori.
+
+Impostiamo il nostro messaggio breve (quello fastidioso che compare appena apriamo i siti), qualcosa del tipo...
+
+	Questo sito Web utilizza i cookie per assicurarti la migliore esperienza 
+	sul nostro sito Web.
+
+... oppure ...
+
+	Questo sito fa uso di cookie per migliorare l’esperienza di navigazione 
+	degli utenti e per raccogliere informazioni sull’utilizzo del sito stesso.
+	Utilizziamo solo cookie tecnici per il funzionamento del sito. 
+	Può conoscere i dettagli consultando la nostra privacy policy facendo 
+	click sul link qui accanto.
+	Proseguendo nella navigazione si accetta l’uso dei cookie; in caso 
+	contrario è possibile abbandonare il sito.
+
+... oppure (nel caso di profiliazione) ...
+
+	Questo sito fa uso di cookie per migliorare l’esperienza di navigazione 
+	degli utenti e per raccogliere informazioni sull’utilizzo del sito stesso.
+	Utilizziamo sia cookie tecnici sia cookie di parti terze per inviare 
+	messaggi promozionali sulla base dei comportamenti degli utenti. Può 
+	conoscere i dettagli consultando la nostra privacy policy facendo click 
+	sul link qui accanto. Proseguendo nella navigazione si accetta l’uso 
+	dei cookie; in caso contrario è possibile abbandonare il sito.
+
+
+Impostiamo la label del pulsante che andrà ad accettare i coockies, ad esempio "Accetto", "Ho capito", ...
+
+Forniamo il link della pagina delle policy; il valore è il nome che abbiamo messo nella url, ad esempio "cookies" e andiamo ad impostare il testo che va sul relativo link di chiamata della pagina privacy ad esempio "Maggiori informazioni".
+
+Avviando la pagina comparirà il testo della privacy e potremo chiamare da qui la pagina delle policy dei coockies.
+
+
+Storage tramite Pickle o JSON
+------------------------------
+
+Python fornisce il modulo pickle nella sua libreria standard per serializzare oggetti Python in forma di byte stream.
+
+Un pickle è una struttura binaria che ha il vantaggio di essere interoperabile tra diverse architetture e diverse versioni di Python, in modo che un oggetto Python possa essere serializzato su pickle su un PC Windows e deserializzato su un oggetto Python di un Raspberry Pi Linux.
+
+Questa flessibilità è accompagnata da vulnerabilità di sicurezza e non è consigliabile utilizzarla per rappresentare dati untrusted. 
+
+Consideriamo il seguente oggetto Python, che contiene diversi tipi di dati:
+
+	import datetime
+
+	data = dict(
+		viewed_books=[17, 18, 3, 2, 1],
+		search_history=['1981', 'Machine Learning', 'Bronte'],
+		background_rgb=(96, 91, 92),
+		foreground_rgb=(17, 17, 17),
+		last_login=datetime.datetime(2019, 12, 3, 15, 30, 30),
+		password_change=datetime.datetime(2019, 12, 4, 15, 20, 30),
+		user_class='Veteran',
+		average_rating=4.75,
+		reviewed_books=(18, 37, 7)
+	)
+
+Può essere serializzato usando pickle e tramite il metodo dumps (dump string) del modulo pickle, possiamo serializzare l'oggetto data per produrre una rappresentazione di byte...
+
+	import pickle
+	data_pickle = pickle.dumps(data)
+	print(data_pickle)
+
+... che produce qualcosa del tipo ...
+
+	b'\x80\x04\x951\x01\x00\x00\x00\x00\x00\x00}\x94(\x8c\x0cviewed_books
+	\x94]\x94(K\x11K\x12K\x03K\x02K\x01e\x8c\x0esearch_history\x94]\x94(
+	\x8c\x041981\x94\x8c\x10Machine Learning\x94\x8c\x06Bronte\x94e\x8c
+	\x0ebackground_rgb\x94K`K[K\\\x87\x94\x8c\x0eforeground_rgb\x94K
+	\x11K\x11K\x11\x87\x94\x8c\nlast_login\x94\x8c\x08datetime\x94\x8c
+	\x08datetime\x94\x93\x94C\n\x07\xe3\x0c\x03\x0f\x1e\x1e\x00\x00
+	\x00\x94\x85\x94R\x94\x8c\x0fpassword_change\x94h\x0fC\n\x07\xe3
+	\x0c\x04\x0f\x14\x1e\x00\x00\x00\x94\x85\x94R\x94\x8c\nuser_class
+	\x94\x8c\x07Veteran\x94\x8c\x0eaverage_rating\x94G@\x13\x00\x00
+	\x00\x00\x00\x00\x8c\x0ereviewed_books\x94K\x12K%K\x07\x87\x94u.'
+
+
+Un altro metodo molto diffuso è JSON (che sta per JavaScript Object Notation); è uno standard diffuso per la messaggistica e lo scambio di dati, comunemente utilizzato per il trasferimento di dati tra browser Web e server e la sua sintassi è un piccolo sottoinsieme del linguaggio JavaScript. 
+
+La serializzazione tramite JSON è un approccio simile a quello che abbiamo delineato con il formato pickle:
+
+	import json
+	data_json = json.dumps(data)
+	print(data_json)
+
+... MA Poiché l'oggetto "data" contiene oggetti Python di tipo set e datetime, che non sono serializzabili con JSON, quando tentiamo di serializzare la struttura verrà generato un errore di tipo...
+
+	TypeError: Object of type datetime is not JSON serializable
+
+Per la serializzazione in JSON, potremmo convertire gli oggetti datetime in stringa e gli oggetti set in liste:
+
+	data['last_login'] = data['last_login'].strftime("%Y%d%m%H%M%S")
+	data['password_change'] = data['password_change'].strftime("%Y%d%m%H%M%S")
+	data['reviewed_books'] = list(data['reviewed_books'])
+
+Nota che abbiamo dovuto convertire in modo esplicito datetime e impostare oggetti, ma la tupla viene automaticamente convertita in un elenco dal JSON.
+
+Il risultato dei dati JSON sono facilmente intelleggibili:
+
+	{"viewed_books": [17, 18, 3, 2, 1], "search_history": ["1981", "Machine 
+	Learning", "Bronte"], "background_rgb": [96, 91, 92], "foreground_rgb": 
+	[17, 17, 17], "last_login": "20190312153030", "password_change": 
+	"20190412152030", "user_class": "Veteran", "average_rating": 4.75, 
+	"reviewed_books": [18, 37, 7]}
+
+Django viene fornito con  PickleSerializer  e  JSONSerializer.  Se si rende necessario modificare il serializzatore, è possibile modificarlo impostando la variabile  SESSION_SERIALIZER  nel file settings.py del progetto, che di default è ...
+
+	SESSION_SERIALIZER='django.contrib.session.serializers.JSONSerializer'
+
+
+Tutto ciò premesso, proviamo ora ad interrogare il database SQLite del progetto ed eseguire query sulla tabella della sessione, in modo da acquisire familiarità con la modalità di archiviazione dei dati della sessione stessa.
+
+Andremo a crare uno script Python per esaminare i dati della sessione archiviati utilizzando JSONSerializer.
+
+Creare la seguente sql din un file "mySession.sql" contentente i seguenti comandi:
+
+	CREATE TABLE IF NOT EXISTS "django_session" 
+			("session_key" varchar(40) NOT NULL PRIMARY KEY, 
+			 "session_data" text NOT NULL, 
+			 "expire_date" datetime NOT NULL);
+	CREATE INDEX "django_session_expire_date_a5c62663" 
+			  ON "django_session" ("expire_date");
+
+A seconda del database che si deve utilizzare, fare in modo che questa sql sia eseguita; eventualmente detta SQL è inutile, poiché la tabella e il suo indice dovrebbero già essere incluse all'interno del database, con la migration che ha consentito di creare, fra le altre, la gestione della sessione.
+
+Ad ogni modo ciò rivela che la tabella django_session nel database memorizza le informazioni sulla sessione nei seguenti campi:
+
+	session_key
+	session_data
+	expire_date
+
+Facciamo una prova. Accertiamoci di NON avere sessioni attive, quindi interroghiamo i dati nella tabella django_session utilizzando il comando SQL da una console abilitata ...
+
+	SELECT * FROM django_session;
+
+Dovrebbe restituire 0 records. Corretto, non ci sono sessioni aperte.
+
+Ripetiamo la prova, ma PRIMA facciamo un login con un utente (o con più utenti), otterremo un record con i tre campi valorizzati.
+
+Osserviamo che i dati della sessione sono codificati in formato base64. Possiamo decifrare questi dati dalla riga di comando di Python usando il modulo base64. Una volta decodificati da base64, i dati session_key contengono una binary_key e un payload JSON separati da due punti, un contenuto del tipo ...
+
+	rc3ptory7ufgusxpt6wjvu24wkgx4nth
+
+	.eJxVjEEOwiAQRe_C2hCgQKcu3XsGMsxMpWpoUtqV8e7apAvd_vfef6mE21rS1mRJE6uzc
+	ur0u2Wkh9Qd8B3rbdY013WZst4VfdCmrzPL83K4fwcFW_nWAuxtxNiFjowb8yDBGgi9OEc
+	2uzGAAY4EEdkJYSD0uWcWCdEMAl69P9_8ODU:1nEDOE:VVN6jnXUsI6LUf5pQaX8OeiTdn
+	jlddw_O7AYMcfDiz0
+
+	2022-02-13 16:49:22.646455
+
+Se eseguiamo i seguenti comandi nel prompt di Python ...
+
+	>> import base64
+	>> import json
+	>> session_key=".eJxVjEEOwiAQRe_C2hCgQKcu3X ........"
+	>> binary_key, payload = base64.b64decode(session_key).split(b":", 1)
+	>> json.loads(payload.decode())
+	
+Possiamo vedere la struttura che è codificata nel carico utile. Il payload rappresenta i dati minimi archiviati in una sessione. Contiene le chiavi per _auth_user_id, auth user back-end e auth user hash con i valori ottenuti da User. id, il nome della classe ModelBackend e l'hash derivato dall'utente per le informazioni sulla password. Impareremo come aggiungere ulteriori dati nella prossima sezione.
+
+A questo punto sviluppiamo una semplice utility Python per decrittografare queste informazioni sulla sessione che chiamiamo session_info.py e che andiamo a porre nella root del nostro sito.
+
+	import base64
+	import json
+	import pprint
+	import sys
+
+	def get_session_dictionary(session_key):
+		binary_key, payload = base64.b64decode(session_key).split(b':', 1)
+		session_dictionary = json.loads(payload.decode())
+		return session_dictionary
+
+	if __name__ == '__main__':
+		if len(sys.argv)>1:
+			session_key = sys.argv[1]
+			session_dictionary = get_session_dictionary(session_key)
+			pp = pprint.PrettyPrinter(indent=4)
+			pp.pprint(session_dictionary)
+
+
+Richiede i moduli che abbiamo usato così come pprint per formattare l'output e il modulo sys per controllare gli argomenti della riga di comando.
+
+Dopo le istruzioni import, la funzione get_session_dictionary() decodifica la chiave di sessione e carica il payload JSON come dizionario Python ed aggiungiamo un blocco di codice in modo che quando questa utilità viene eseguita, prenda un argomento session_key specificato nella riga di comando e lo converta in un dizionario utilizzando la funzione get_session_dictionary; quindi, usiamo il modulo pprint per stampare una versione rientrata della struttura del dizionario.
+
+Possiamo usare questo script Python per esaminare i dati della sessione archiviati nel database, richiamandolo dalla riga di comando e passando i dati della sessione come argomento come segue:
+
+	python session_info.py {stringa dei dati di sessione}
+
+Sarà utile per eseguire il debug del comportamento della sessione quando si tenta l'attività finale.
+
+Questo script restituisce le informazioni sulla sessione decodificata. Al momento, la sessione contiene solo tre chiavi:
+
+	• auth_user_backend è una rappresentazione in formato stringa della classe del backend utente. Poiché il nostro progetto memorizza le credenziali dell'utente nel modello, viene utilizzato ModelBackend.
+
+	• auth_user_hash è un hash della password dell'utente.
+
+	• auth_user_id è l'ID utente ottenuto dall'attributo .id del modello User.
+
+
+Memorizzazione dei dati nelle sessioni
+--------------------------------------
+
+Abbiamo spiegato il modo in cui le sessioni vengono implementate in Django. 
+
+Ora esamineremo brevemente alcuni dei modi in cui possiamo utilizzare le sessioni per arricchire la nostra esperienza utente.
+
+In Django, la sessione è un attributo dell'oggetto request ed è implementato come un oggetto simile a un dizionario. 
+
+Dal nostro punto di vista, possiamo assegnare chiavi all'oggetto sessione come un tipico dizionario, come ...
+
+	request.session{'books_read_count'} = 39
+
+Tuttavia ci sono alcune restrizioni:
+
+	- le chiavi nella sessione devono essere stringhe, quindi gli interi e
+	  timestamps non sono consentiti. 
+
+	- Le chiavi che iniziano con un trattino basso sono riservate all'uso 
+	  interno del sistema. 
+
+	- I dati sono limitati a valori che possono essere codificati come JSON,
+	  quindi alcune sequenze di byte che non possono essere decodificate 
+	  come UTF-8, come la binary_key elencata in precedenza, non possono 
+	  essere archiviate come dati JSON. 
+	  
+Un altra cosa da considerare è evitare di riassegnare il valore request.session; dovremmo solo assegnare o eliminare chiavi. 
+
+Quindi, non bisogna fare qualcosa come ...
+
+	request.session = {'books_read_count': 30, 'books_reviewed_count': 39}
+
+... ma va fatto invece questo ...
+
+	request.session['books_read_count'] = 30
+	request.session['books_reviewed_count'] = 39
+
+Tenendo presente queste restrizioni, esamineremo l'uso che possiamo fare dei dati di sessione nella nostra applicazione Recensioni.
+
