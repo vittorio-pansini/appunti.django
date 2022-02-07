@@ -1,6 +1,6 @@
 *************************************
  10 - Gestione delle sessioni utente
-      [1.0.0]
+      [1.1.0]
 *************************************
 
 Dovendo pubblicare un sito su Internet è chiaro che non si può lasciare che l'applicazione venga aperta e utilizzata da chiunque; È per questo che è necessario implementare all'interno del sito une funzione di login logout e di autenticazione.
@@ -687,11 +687,42 @@ Poi andiamo ad aprire il form base, quantomeno quello che viene chiamato per pri
 		{% display_cookie_consent %}
 	</head>
 
-Per usare la libreria è necessario creare una voce nel database, ovvero il modello CookieConsentSettings; andiamo quindi ad eseguire la migrazione:
+Per usare la libreria è necessario creare una voce nel database, ovvero il modello CookieConsentSettings.
+
+Se stiamo usando Django in una versione uguale o superiore alla 3.2 o se abbiamo definito in settings.py la variabile DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField', è necessario modificare il codice del file apps.py della app relativa alla libreria, nel percorso di virtualenv per intenderci.
+
+Nel nostro caso il file è ...
+
+	{virualenv_path}\Lib\site-packages\django_simple_cookie_consent\apps.py
+
+Il codice contenuto è ...
+
+	from django.apps import AppConfig
+
+	class DjangoSimpleCookieConsentConfig(AppConfig):
+		name = 'django_simple_cookie_consent'
+
+... e va modificato in ...
+
+	from django.apps import AppConfig
+
+	class DjangoSimpleCookieConsentConfig(AppConfig):
+		default_auto_field = 'django.db.models.AutoField'
+		name = 'django_simple_cookie_consent'
+
+... aggiungendo quindi la definizione di default_auto_field dentro la classe che definisce il modello in uso.
+
+Questo per evitare che l'indice creato automaticamente da Django sia BigAutoField (intero 64 bit), mentre quello in uso dalla libreria è "ancora" AutoField (intero 32 bit) e, che, in fase di migrazione, generi un errore del tipo ...
+
+	WARNINGS:
+	users.User: (models.W042) Auto-created primary key used when not defining 
+	a primary key type, by default 'django.db.models.AutoField'.
+
+Avendo risolto il problema di cui sopra, andiamo quindi ad eseguire la migrazione per generare il modello CookieConsentSettings:
 
 	python manage.py migrate
 
-Bisogna valorizzare il record di gestione dei coockies; avviamo la nostra applicazione e la pagina dell'amministratore (che si pesume sia stata già abilitata) ...
+Bisogna valorizzare il record di gestione dei coockies; avviamo la nostra applicazione e la pagina dell'amministratore (che si presume sia stata già abilitata) ...
 
    http://127.0.0.1:8000/admin/ 
    
@@ -934,5 +965,142 @@ Quindi, non bisogna fare qualcosa come ...
 	request.session['books_read_count'] = 30
 	request.session['books_reviewed_count'] = 39
 
-Tenendo presente queste restrizioni, esamineremo l'uso che possiamo fare dei dati di sessione nella nostra applicazione Recensioni.
+Tenendo presente queste restrizioni, esamineremo l'uso che possiamo fare dei dati di sessione nella nostra applicazione.
 
+
+Un altro metodo per gestire il login e il logout
+------------------------------------------------
+
+Possiamo voler gestire in modo più controllato la nostra fase di login e logout, senza affidarci completamente ai templates di Django, ma volendo, ad esempio, sfruttare quelli di bootstrap; come vedremo l'approccio è leggeremente più procedurale e, a parere dello scrivente, anche un po' meno articolato e difficile.
+
+I prossimi passi consentiranno la creazione di un sistema di login e logout sfruttando dei form terzi, ad esempio quelli forniti da alcuni template venduti su internet e buona parte dei concetti descritti nel capitolo 6, dedicato ai form.
+
+Per ora ci accontenteremo di tre azioni, login, logout e register rispettivamente un form per il login nel nostro sito, un codice per realizzare il logout all'utente circa l'uscita e un form per la registrazione.
+
+Nel percorso dei template andiamo a creare una cartella che si chiamerà  accounts  allo scopo di non essere disordinati nella nostra cartella templates e all'interno andiamo ad inserire la pagina  login_page.html, copiandola dal precedente esempio (vedasi precedenti esercizi), quindi apriamo view.py ed andiamo ad inserire i seguenti import fra quelli esistenti:
+
+	from django.contrib.auth.forms import UserCreationForm
+
+Prima di realizzare il codice delle tre azioni, occupiamoci anche di integrarle con la messaggistica; può essere un ottimo alleato il sistema di messaggistica interno di Django, che useremo più avanti, descritto in ...
+
+	https://docs.djangoproject.com/en/4.0/ref/contrib/messages/
+
+In sostanza andiamo ad importare i messaggi ...
+	
+	from django.contrib import messages
+
+... e saremo liberi di "sparare" nel nostro form i messaggi che vogliamo, "aggiungendoli" alla coda nella forma ...
+
+	messages.add_message(request, messages.INFO, 'Hello world.')
+
+... oppure nella forma più concisa ...
+
+	messages.debug(request, '%s SQL statements were executed.' % count)
+	messages.info(request, 'Three credits remain in your account.')
+	messages.success(request, 'Profile details updated.')
+	messages.warning(request, 'Your account expires in three days.')
+	messages.error(request, 'Document deleted.')
+
+... con il form che dovrà poterne gestire più di uno, ad esempio tramite un ciclo ...
+
+	{% for message in messages %}
+		<p {% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</p>
+    {% endfor %}
+
+Andiamo ora a creare un percorso sotto templates che chiamiamo  accounts  e dentro questo percorso andiamo a creare due pagine html che possiamo generare vuote oppure già copiare da altri template pre-realizzati; i due teplate da creare sono:
+
+	login_page.html				register_page.html
+
+Andiamo ora ad inserire le due voci in urls.py che ci servono a gestire le chiamate url ...
+
+	# path('accounts/', include(('django.contrib.......
+    path('login', agenziaweb.views.loginPage, name='login'),
+    path('registration', agenziaweb.views.registrationPage, 
+										name='registration'),
+    path('logout', agenziaweb.views.logoutAction, name='logout'),
+
+Un altro file che servirà al nostro scopo sarà quello di gestione dei form, cioè form.py, un file che abbiamo eventualmente già realizzato nel corso del citato capitolo 6.
+
+	from django.contrib.auth.forms import UserCreationForm
+	from django.contrib.auth.forms import User
+	from django import forms
+
+La UserCreationForm() è una classe estremamente utile per la creazione e gestione dei form di account, la classe User ci consentirà di disporre del modello (tabella) dei dati dell'utente, mentre la classe forms, se abbiamo già implementato altri form, dovrebbe essere già presente nel nostro file di gestione (!)
+
+A questo punto possiamo inserire il codice che renderizza il form di login, nel nostro file view.py; per prima cosa agganciamo nella import la classe che abbiamo appena creato:
+
+	from django.contrib.auth import authenticate, login, logout
+	....
+	#  Login
+	def loginPage(request):
+		if request.method == 'POST':
+			nomeUtente = request.POST.get('username')
+			passwordUtente = request.POST.get('password')
+			utente = authenticate(request, 
+						username=nomeUtente, password=passwordUtente)
+			if utente is not None:
+				login(request, utente)
+				redirect('home')
+			else:
+				messages.info(request, "Nome utente o password errati")
+		context = {}
+		return render(request, "accounts/login_page.html", context)
+
+La pagina login_page.html contiene un codice di un form di cui presentiamo un profilo sintetico:
+
+	
+	[codice che siamo riusciti a realizzare]
+
+
+
+A questo punto abbiamo bisogno di creare un form per la registrazione degli utenti, con la classe UserCreationForm; inseriamo dunque il seguente codice, ma NON nelle view, ma nel nostro file forms.py che si trova nel percorso delle app e che abbiamo usato, per l'appunto, per gestire i form di input degli utenti:
+	
+	class FormCreaUtente(UserCreationForm):
+		class Meta:
+			model = User
+			fields = ['username', 'email', 'password1', 'password2']
+
+Questa classe va implementata nel form di registrazione utente nel file view.py come segue:
+
+	from .forms import ..., FormCreaUtente
+	....
+	#  Registrazione
+	def registrationPage(request):
+		form = FormCreaUtente()
+		if request.method == 'POST':
+			form = FormCreaUtente(request.POST)
+			if form.is_valid():
+				form.save()
+				user = form.cleaned_data.get('username')
+				messages.success(request, 
+					f"Account {user} creato con successo")
+				return redirect('login')
+		context = {'form': form}
+		return render(request, 
+					'accounts/register_page.html', context)
+
+L'oggetto form viene istanziato tramite la classe personalizzata FormCreaUtente() importata da forms.py
+
+Infine andiamo a modificare i due templates che si occuperanno rispettivamente del login e della registrazione degli utenti.
+
+In sostanza altro non sono che dei form di tipo POST, quindi facciamo riferimento al codice che già abbiamo gestito precedentemente quando abbiamo parlato dei ModelForms: avremo la variabile {{ form }}, da noi passata all'interno di context{} e contenente i campi che ci sono all'interno della classe che genera l'oggetto, ad esempio FormCreaUtente().
+
+A questo punto possiamo gestire l'input nel modo che vogliamo, ad esempio sfruttando dei form già esitenti o dei template che abbiamo creato a parte gestendo cicli di {% for field in form %} oppure andando a leggere i singoli campi, ad esempio {{form.username}}, {{form.username.label}}, eccetera.
+
+Ricordiamoci che la struttura del form richiede necessariamente l'attivazione del {% csrf_token %} e di gestire gli errori autogestiti da Django nei form di registrazione e login inserendo opportunamente uno spazio dove andremo a porre il contenuto {{form.errors}}.
+
+Naturalmente non possiamo che non occuparci del logout dell'utente, andando a realizzare la view che se ne occuperà ...
+
+	def logoutAction(request):
+		logout(request)
+		return redirect('login')
+
+... e andando ad inserire nella pagina principale, o dove serve, il riferimento al logout:
+
+	<span>Ciao, {{request.user}} </span>
+	<span><a href="{% url 'logout' %}">logout</a></span>
+
+
+
+
+https://www.youtube.com/watch?v=tUqUdu0Sjyc

@@ -86,7 +86,35 @@ Se all'avvio compare nella console un messaggio del tipo ...
 Per risolvere o si rende la chiave usata primaria o si aggiunge in settings.py la seguente riga...
 
 	DEFAULT_AUTO_FIELD='django.db.models.AutoField'
+	
+... oppure, ancora meglio ...
 
+	DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
+
+... che in realtà dalla versione 3.2 è il valore di default.
+
+Questa è la soluzione generica, tuttavia il problema può permanere nel caso in cui un determinato modello (tabella) di una determinata app continua a mantenere "AutoField" come indice automatico mentre si sceglie di creare "BigAutoField" in automatico nel proprio progetto.
+
+La soluzione è raggiungere il file  apps.py  all'interno dell'app interessata e modificarla in modo da "forzare" questa variabile esclusivamente per quella app e non per tutto il progetto.
+
+Un problema del genere si è presentato quando ho importato la app 'django_simple_cookie_consent', che, rispetto a Django 4.0 in uso, era scritta per funzionare con versioni precedenti alla 3.1; nel caso specifico il codice in apps.py che è contenuto nel percorso {virualenv_path}\Lib\site-packages\django_simple_cookie_consent che era ...
+
+	from django.apps import AppConfig
+
+	class DjangoSimpleCookieConsentConfig(AppConfig):
+		name = 'django_simple_cookie_consent'
+
+... è stato modificato in ...
+
+	from django.apps import AppConfig
+
+	class DjangoSimpleCookieConsentConfig(AppConfig):
+		default_auto_field = 'django.db.models.AutoField'
+		name = 'django_simple_cookie_consent'
+
+... aggiungendo quindi la definizione di default_auto_field dentro la classe che definisce il modello in uso.
+
+Ricordarsi di eseguire l'azione di migrate per allineare la app al progetto: si noterà la scomparsa del warning.
 
 
 [.] Errori durante l'esecuzione del migrate con mySQL
