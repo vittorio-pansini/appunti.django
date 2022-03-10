@@ -1,6 +1,6 @@
 ****************************************
  14 - Librerie di terze parti di Django
-      [1.0.0]
+      [1.0.1]
 ****************************************
 
 In Django è possibile inserire una serie di librierie di terze parti che possono aggiungere extra features: vi sono librerie che possono migliorare l'autenticazione altre che gestiscono i pagamenti altre che consentono la modifica di immagini.
@@ -92,6 +92,8 @@ Abbiamo bisogno ora di creare una classe alternativa che erediti tutti i valori 
 	class Prod(Dev):
 		DEBUG = False
 		SECRET_KEY = values.SecretValue()
+		ALLOWED_HOSTS = values.ListValue([])  # ['153.92.221.13', '.vpagenziaweb', '.vpagenziaweb.it',]
+		DATABASES = values.DatabaseURLValue(environ_prefix="DJANGO_")
 
 I valori all'interno di questa nuova classe sono degli overraid di quelli presenti nella classe ereditata.
 

@@ -1,0 +1,3038 @@
+************************************************
+ 12 - Object-Relational Mapping (ORM) di Django
+      [0.0.0]
+************************************************
+
+L'Object-Relational Mapping (ORM) è una tecnica di programmazione che favorisce l'integrazione di sistemi software aderenti al paradigma della programmazione orientata agli oggetti con sistemi RDBMS.
+
+Mediante un'interfaccia orientata agli oggetti, ORM fornisce tutti i servizi inerenti alla persistenza dei dati, astraendo nel contempo le caratteristiche implementative dello specifico RDBMS utilizzato.
+
+I principali vantaggi nell'uso di un tale sistema sono evidenti:
+
+	1) Il superamento (più o meno completo) dell'incompatibilità di fondo tra il progetto orientato agli oggetti ed il modello relazionale sul quale è basata la maggior parte degli attuali RDBMS utilizzati.
+
+	2) Un'elevata portabilità rispetto alla tecnologia DBMS utilizzata: cambiando DBMS non devono essere riscritte le routine che implementano lo strato di persistenza; generalmente basta cambiare poche righe nella configurazione del prodotto per l'ORM utilizzato.
+
+	3) Una drastica riduzione della quantità di codice sorgente da redigere; l'ORM maschera dietro semplici comandi le complesse attività di creazione, prelievo, aggiornamento ed eliminazione dei dati (dette CRUD - Create, Read, Update, Delete). Tali attività occupano di solito una buona percentuale del tempo di stesura, testing e manutenzione complessivo. Inoltre, sono per loro natura molto ripetitive e, dunque, favoriscono la possibilità che vengano commessi errori durante la stesura del codice che le implementa.
+
+	4) Suggerisce la realizzazione dell'architettura di un sistema software mediante approccio stratificato, tendendo pertanto ad isolare in un solo livello la logica di persistenza dei dati, a vantaggio della modularità complessiva del sistema.
+
+I prodotti per l'ORM attualmente più diffusi offrono spesso nativamente funzionalità che altrimenti andrebbero realizzate manualmente dal programmatore, fra queste abbiamo:
+
+	- Caricamento automatico del grafo degli oggetti secondo i legami di associazione definiti a livello di linguaggio. Il caricamento di un'ipotetica istanza della classe Studente, potrebbe automaticamente produrre il caricamento dei dati collegati sugli esami sostenuti. Tale caricamento, in più, può avvenire solo se il dato è effettivamente richiesto dal programma, ed è altrimenti evitato (tecnica nota con il nome di lazy-initialization).
+	
+	- Gestione della concorrenza nell'accesso ai dati durante conversazioni. Conflitti durante la modifica di un dato da parte di più utenti in contemporanea, possono essere automaticamente rilevati dal sistema ORM.
+	
+	- Meccanismi di caching dei dati. Per esempio, se accade che uno stesso dato venga prelevato più volte dal RDBMS, il sistema ORM può fornire automaticamente un supporto al caching che migliori le prestazioni dell'applicazione e riduca il carico sul sistema DBMS.
+	
+	- Gestione di una conversazione mediante uso del design pattern Unit of Work, che ritarda tutte le azioni di aggiornamento dei dati al momento della chiusura della conversazione; in questo modo le richieste inviate al RDBMS sono quelle strettamente indispensabili (per es. viene eseguita solo l'ultima di una serie di update su uno stesso dato, oppure non viene eseguita affatto una serie di update su un dato che in seguito viene eliminato); inoltre il colloquio con il DBMS avviene mediante composizione di query multiple in un unico statement, limitando così al minimo il numero di round-trip-time richiesti e, conseguentemente, i tempi di risposta dell'applicazione.
+
+In questo capitolo vedremo come Django applica questa tecnica e come trarne vantaggio.
+
+Maggiori informazioni sono comunque reperibili sulla documentazione ufficiale:
+
+	https://docs.djangoproject.com/en/4.0/topics/db/#
+
+
+I modelli
+---------
+
+Come abbiamo visto precedentemente, un modello è l'unica e definitiva fonte di informazioni sui nostri dati. Contiene i campi e i comportamenti essenziali dei dati che stiamo archiviando. In genere, ogni modello viene mappato su una singola tabella del database.
+
+Ogni modello è una classe Python ovvero una sottoclasse di django.db.models.Model, dove ogni attributo del modello rappresenta un campo del database. Prendiamo come esempio il seguente modello:
+
+	from django.db import models
+
+	class Person(models.Model):
+		first_name = models.CharField(max_length=30)
+		last_name = models.CharField(max_length=30)
+
+La sua query di creazione sarebbe ...
+
+	CREATE TABLE myapp_person (
+		"id" serial NOT NULL PRIMARY KEY,
+		"first_name" varchar(30) NOT NULL,
+		"last_name" varchar(30) NOT NULL
+	);
+
+I campi possono essere definiti come descritto alla pagina...
+
+	https://docs.djangoproject.com/en/4.0/ref/models/fields/#model-field-types
+
+Ogni campo accetta un determinato insieme di argomenti specifici del campo (documentati nel riferimento del campo del modello ). Ad esempio, CharField(e le sue sottoclassi) richiedono un argomento max_length che specifichi la dimensione del campo VARCHAR del database utilizzato per memorizzare i dati.
+
+C'è anche una serie di argomenti comuni disponibili per tutti i tipi di campo. Tutti sono opzionali. Sono completamente spiegati nel riferimento, ma ecco un breve riassunto di quelli più utilizzati:
+
+	"null"	Se True, Django memorizzerà valori vuoti come NULL nel database. L'impostazione predefinita è False.
+
+	"blank"	Se True, il campo può essere vuoto. L'impostazione predefinita è False. Nota che blank è diverso da null: null è puramente correlato al database, mentre blank è correlato alla convalida. Se un campo ha blank=True, la convalida del modulo consentirà l'immissione di un valore vuoto. Se un campo ha blank=False, il campo sarà obbligatorio.
+	
+	"choices" Consente di definire una serie di scelte prefissate. Data un'istanza del modello, con "choices" è possibile accedere al valore visualizzato per un campo con utilizzando il metodo get_FOO_display(). Per esempio:
+
+		from django.db import models
+
+		class Person(models.Model):
+			SHIRT_SIZES = (
+				('S', 'Small'),
+				('M', 'Medium'),
+				('L', 'Large'),
+			)
+			name = models.CharField(max_length=60)
+			shirt_size = models.CharField(max_length=1, choices=SHIRT_SIZES)
+
+
+		>>> p = Person(name="Fred Flintstone", shirt_size="L")
+		>>> p.save()
+		>>> p.shirt_size
+		'L'
+		>>> p.get_shirt_size_display()
+		'Large'
+
+	"default" Il valore predefinito per il campo. Può essere un valore o un oggetto richiamabile. Se richiamabile verrà chiamato ogni volta che viene creato un nuovo oggetto.
+	
+	"help_text" Testo aggiuntivo di "aiuto" da visualizzare con il widget del modulo. È utile per la documentazione anche se il nostro campo non è utilizzato in un modulo.
+	
+	"primary_key" Se True, questo campo è la chiave primaria per il modello. Se non specifichi alcun campo primary_key=True nel nostro modello, Django aggiungerà automaticamente un IntegerField per contenere la chiave primaria, quindi non è necessario impostare primary_key=True a nessuno dei campi a meno che non si voglia sovrascrivere il comportamento predefinito della chiave primaria.
+
+	"unique" Se True, questo campo deve essere univoco in tutta la tabella.
+	
+Ogni tipo di campo, ad eccezione di ForeignKey, ManyToManyField e OneToOneField, accetta un primo argomento posizionale facoltativo, un nome dettagliato ovvero un "verbose name". Se il verbose name non viene fornito, Django lo creerà automaticamente utilizzando il nome dell'attributo del campo, convertendo i caratteri di sottolineatura in spazi.
+
+	first_name = models.CharField("person's first name", max_length=30)
+	first_name = models.CharField(max_length=30)
+
+Nel primo caso, il nome dettagliato è "person's first name", nel secondo caso, il nome dettagliato è "first name"
+
+
+Relazioni
+---------
+
+Chiaramente, una delle grandi potenzialità dei database relazionali sta nel mettere, appunto, in relazione le tabelle tra loro. Django offre alcuni modi per definire i tre tipi più comuni di relazioni di database: molti-a-uno, molti-a-molti e uno-a-uno.
+
+
+[ Relazioni molti-a-uno]
+
+Per definire una relazione molti-a-uno, si usa django.db.models.ForeignKey come qualsiasi altro tipo Field, cioè includendolo come attributo di classe del proprio modello.
+
+ForeignKeyrichiede un argomento posizionale, che è la classe a cui è correlato il modello. Ad esempio, se un modello Car (automobile) ha un Manufacturer (produttore), ovvero un Manufacturer produce più auto ma ogni elemento Car ha solo un Manufacturer, utilizziamo le seguenti definizioni:
+
+	from django.db import models
+
+	class Manufacturer(models.Model):
+		# ...
+		pass
+
+	class Car(models.Model):
+		manufacturer = models.ForeignKey(Manufacturer, on_delete=models.CASCADE)
+		# ...
+
+L'azione che viene collegata con on_delete fa in modo che, cancellato il record manifacturer relativo, la cancellazione si propaghi a tutti i record di "Car" che siano legati al tale record di "Manifacturer".
+
+
+[ Relazioni molti-a-molti ]
+
+Per definire una relazione molti-a-molti, utilizziamo ManyToManyField, anche questo come qualsiasi altro tipo Field, includendolo come attributo di classe del modello; anche ManyToManyField richiede come argomento posizionale la classe a cui è correlato il modello.
+
+Ad esempio, se a Pizza ha più oggettu Topping (ingredienti), e Topping può trovarsi su più pizze e ogni Pizza ha più ingredienti, ecco come lo rappresenteremmo:
+
+	from django.db import models
+
+	class Topping(models.Model):
+		# ...
+		pass
+
+	class Pizza(models.Model):
+		# ...
+		toppings = models.ManyToManyField(Topping)
+
+
+Come con ForeignKey, possiamo anche creare relazioni ricorsive (un oggetto con una relazione molti-a-molti con se stesso) e relazioni con modelli non ancora definiti; è suggerito, ma non obbligatorio, che il nome di un ManyToManyField (toppings nell'esempio sopra) sia un plurale che descrive l'insieme di oggetti del modello correlati.
+
+Non importa quale modello abbia la dichiarazione ManyToManyField(), MA bisogna inserirlo SOLO IN UNO dei modelli, NON in entrambi.
+
+In genere, le istanze ManyToManyField dovrebbero andare nell'oggetto che verrà modificato su un modulo. Nell'esempio sopra, toppings è in Pizza (piuttosto che avere in Topping un pizzas con ManyToManyField) perché è più naturale pensare a una pizza con ingredienti rispetto a un ingrediente su più pizze. Il modo in cui è impostato sopra, il modulo Pizza consentirebbe agli utenti di selezionare gli ingredienti.
+
+
+Quando si ha a che fare solo con relazioni molti-a-molti, oltre a ManyToManyField, potrebbe essere necessario associare dei dati alla relazione tra due modelli.
+
+
+Si consideri ad esempio il caso di un'applicazione che tiene traccia dei gruppi musicali a cui appartengono i musicisti. Esiste una relazione molti-a-molti tra una persona e i gruppi di cui fa parte, quindi potremmo usare a ManyToManyField per rappresentare questa relazione; tuttavia, ci sono dettagli sull'appartenenza che potremmo voler raccogliere, come la data in cui la persona si è unita al gruppo. 
+
+Per queste situazioni, Django consente di specificare campi aggiuntivi nel modello intermedio che verrà utilizzato per governare la relazione molti-a-molti. 
+
+Il modello intermedio è associato ManyToManyFieldall'utilizzo throughdell'argomento per puntare al modello che fungerà da intermediario. Per il nostro esempio, il codice sarebbe simile a questo:
+
+	from django.db import models
+
+	class Person(models.Model):
+		name = models.CharField(max_length=128)
+
+		def __str__(self):
+			return self.name
+
+	class Group(models.Model):
+		name = models.CharField(max_length=128)
+		members = models.ManyToManyField(Person, through='Membership')
+
+		def __str__(self):
+			return self.name
+
+	class Membership(models.Model):
+		person = models.ForeignKey(Person, on_delete=models.CASCADE)
+		group = models.ForeignKey(Group, on_delete=models.CASCADE)
+		date_joined = models.DateField()
+		invite_reason = models.CharField(max_length=64)
+
+
+Quando si imposta il modello intermedio, si specificano in modo esplicito le chiavi esterne ai modelli coinvolti nella relazione molti-a-molti; questa dichiarazione esplicita definisce come i due modelli sono correlati.
+
+Ci sono alcune restrizioni sul modello intermedio:
+
+	- Il modello intermedio deve contenere UNA e una sola chiave esterna al modello sorgente (questo sarebbe "Group" nel nostro esempio), oppure bisognoa specificare esplicitamente le chiavi esterne che Django dovrebbe usare per la relazione usando ManyToManyField.through_fields. Se si ha più di una chiave esterna e through_fields non è specificata, verrà generato un errore di convalida. Una restrizione simile si applica alla chiave esterna del modello di destinazione (questo sarebbe "Person" nel nostro esempio).
+
+	- Per un modello che ha una relazione molti-a-molti con se stesso attraverso un modello intermedio, sono consentite due chiavi esterne per lo stesso modello, ma saranno trattate come i due (diversi) lati della relazione molti-a-molti. Se sono presenti più di due chiavi esterne, è necessario specificare anche through_fields come sopra, altrimenti verrà generato un errore di convalida.
+
+Ora che abbiamo impostato il modello intermedio ManyToManyField ("Membership", in questo caso), siamo pronti per iniziare a creare alcune relazioni molti-a-molti; creando istanze del modello intermedio:
+
+	>>> ringo = Person.objects.create(name="Ringo Starr")
+	>>> paul = Person.objects.create(name="Paul McCartney")
+	>>> beatles = Group.objects.create(name="The Beatles")
+	
+	>>> m1 = Membership(person=ringo, group=beatles,
+	...     date_joined=date(1962, 8, 16),
+	...     invite_reason="Needed a new drummer.")
+	>>> m1.save()
+	>>> beatles.members.all()
+		<QuerySet [<Person: Ringo Starr>]>
+	
+	>>> ringo.group_set.all()
+		<QuerySet [<Group: The Beatles>]>
+	
+	>>> m2 = Membership.objects.create(person=paul, group=beatles,
+	...     date_joined=date(1960, 8, 1),
+	...     invite_reason="Wanted to form a band.")
+	>>> beatles.members.all()
+		<QuerySet [<Person: Ringo Starr>, <Person: Paul McCartney>]>
+
+
+Possiamo anche utilizzare add(), create(), o set()per creare relazioni, purché specifichi through_defaultsper i campi obbligatori:
+
+	>>> beatles.members.add(john, 
+						through_defaults={'date_joined': date(1960, 8, 1)})
+	>>> beatles.members.create(name="George Harrison", 
+						through_defaults={'date_joined': date(1960, 8, 1)})
+	>>> beatles.members.set([john, paul, ringo, george], 
+						through_defaults={'date_joined': date(1960, 8, 1)})
+
+
+Possiamo creare direttamente istanze del modello intermedio.
+
+Se la tabella personalizzata definita dal modello intermedio non impone l'univocità sulla coppia, consentendo più valori, la chiamata rimuoverà tutte le istanze del modello intermedio:(model1, model2)remove()
+
+	>>> Membership.objects.create(person=ringo, group=beatles,
+	...     date_joined=date(1968, 9, 4),
+	...     invite_reason="You've been gone for a month and we miss you.")
+	>>> beatles.members.all()
+		<QuerySet [<Person: Ringo Starr>, <Person: Paul McCartney>, 
+	           <Person: Ringo Starr>]>
+
+Questo cancella entrambe le istanze del modello intermedio per "Ringo Starr":
+
+	>>> beatles.members.remove(ringo)
+	>>> beatles.members.all()
+		<QuerySet [<Person: Paul McCartney>]>
+
+
+Il metodo clear() può essere utilizzato per rimuovere tutte le relazioni molti-a-molti per un'istanza:
+
+I Beatles si sciolgono ...
+
+	>>> beatles.members.clear()
+
+... e questo cancella le istanze del modello intermedio ...
+
+	>>> Membership.objects.all()
+		<QuerySet []>
+
+
+Una volta stabilite le relazioni molti-a-molti, è possibile inviare query. Proprio come con le normali relazioni molti-a-molti, è possibile eseguire query utilizzando gli attributi del modello correlato molti-a-molti:
+
+
+Cerchiamo tutti i gruppi in cui il nome di un membro incomincia con "Paul":
+
+	>>> Group.objects.filter(members__name__startswith='Paul')
+		<QuerySet [<Group: The Beatles>]>
+
+Poiché stiamo utilizzando un modello intermedio, possiamo anche interrogare i suoi attributi:
+	
+Cerchiamo tutti i membri dei Beatles che si sono uniti dopo il 1/1/1961.
+
+	>>> Person.objects.filter(
+	...     group__name='The Beatles',
+	...     membership__date_joined__gt=date(1961,1,1))
+		<QuerySet [<Person: Ringo Starr]>
+
+
+Se abbiamo bisogno di accedere alle informazioni di un collegamento, possiamo farlo interrogando direttamente il modello Membership:
+
+	>>> ringos_membership=Membership.objects.get(group=beatles, person=ringo)
+	>>> ringos_membership.date_joined
+		datetime.date(1962, 8, 16)
+	>>> ringos_membership.invite_reason
+		'Needed a new drummer.'
+
+Un altro modo per accedere alle stesse informazioni è interrogare la relazione inversa molti-a-molti da un oggetto Person:
+
+	>>> ringos_membership = ringo.membership_set.get(group=beatles)
+	>>> ringos_membership.date_joined
+		datetime.date(1962, 8, 16)
+	>>> ringos_membership.invite_reason
+		'Needed a new drummer.'
+
+
+[ Relazioni uno a uno ]
+
+Per definire una relazione uno-a-uno, utilizzare OneToOneField; si usa come qualsiasi altro tipo Field, includendolo come attributo di classe del nostro modello.
+
+Questo è molto utile sulla chiave primaria di un oggetto quando quell'oggetto "estende" un altro oggetto in qualche modo.
+
+OneToOneField richiede un argomento posizionale, che è la classe a cui è correlato il modello.
+
+Ad esempio, se stiamo costruendo un database di "luoghi", costruiremmo cose piuttosto standard come indirizzo, numero di telefono, ecc. nel database. Quindi, se volessimo costruire un database di ristoranti sopra i luoghi, invece di ripetere e replicare quei campi nel modello Restaurant, potremmo fare Restaurant un OneToOneField a Place(perché un ristorante "è un" luogo; infatti, per gestire questo in genere useresti inheritance , che implica una relazione uno-a-uno implicita).
+
+Come con ForeignKey, è possibile definire una relazione ricorsiva e fare riferimento a modelli non ancora definiti.
+
+Ecco di seguito l'esempio completo:
+
+	from django.db import models
+
+	class Place(models.Model):
+		name = models.CharField(max_length=50)
+		address = models.CharField(max_length=80)
+
+		def __str__(self):
+			return "%s the place" % self.name
+
+	class Restaurant(models.Model):
+		place = models.OneToOneField(
+			Place,
+			on_delete=models.CASCADE,
+			primary_key=True,
+		)
+		serves_hot_dogs = models.BooleanField(default=False)
+		serves_pizza = models.BooleanField(default=False)
+
+		def __str__(self):
+			return "%s the restaurant" % self.place.name
+
+	class Waiter(models.Model):
+		restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+		name = models.CharField(max_length=50)
+
+		def __str__(self):
+			return "%s the waiter at %s" % (self.name, self.restaurant)
+
+
+Su https://docs.djangoproject.com/en/4.0/topics/db/examples/one_to_one/ possiamo leggere il funzionamento completo dell'esempio con le relative varianti.
+
+I campi OneToOneField accettano anche un argomento facoltativo parent_link.
+
+Le classi OneToOneField venivano utilizzate per diventare automaticamente la chiave primaria su un modello; questo non è più vero, dato che possiamo passare manualmente l'argomento primary_key se vogliamo; pertanto ora è possibile avere più campi di tipo OneToOneField su un singolo modello.
+
+
+Modelli tra file
+----------------
+
+È perfettamente corretto mettere in relazione un modello con un altro appartenente ad un'altra app. 
+
+Per fare ciò, importiamo il modello correlato nella parte superiore del file in cui è definito il nostro modello, quindi facciamo riferimento all'altra classe di modello ove necessario. Per esempio:
+
+	from django.db import models
+	from geography.models import ZipCode
+
+	class Restaurant(models.Model):
+		# ...
+		zip_code = models.ForeignKey(
+			ZipCode,
+			on_delete=models.SET_NULL,
+			blank=True,
+			null=True,
+		)
+	
+
+Restrizioni sui nomi dei campi
+------------------------------
+
+Django pone alcune restrizioni sui nomi dei campi del modello:
+
+	1. Un nome di campo non può essere una parola riservata Python, perché ciò comporterebbe un errore di sintassi Python.
+
+		class Example(models.Model):
+			pass = models.IntegerField() 
+			# 'pass' is a reserved word!
+
+	2. Un nome di campo non può contenere più di un carattere di sottolineatura in una riga, a causa del modo in cui funziona la sintassi di ricerca delle query di Django. Per esempio:
+
+		class Example(models.Model):
+			foo__bar = models.IntegerField() 
+			# 'foo__bar' has two underscores!
+
+	3. Il nome di un campo non può terminare con un trattino basso, per ragioni simili.
+
+
+Tuttavia, è possibile aggirare queste limitazioni, poiché il nome del campo non deve necessariamente corrispondere al nome della colonna del database con l'opzione db_column.
+
+Le parole riservate SQL, come join, where o select, sono consentite come nomi di campi del modello, poiché Django esegue l'escape di tutti i nomi di tabelle e colonne del database in ogni query SQL sottostante. Esso utilizza la sintassi di virgolette del nostro particolare motore di database.
+
+
+Tipi di campi personalizzati
+----------------------------
+
+Se uno dei campi del modello esistenti non può essere utilizzato per soddisfare i nostri scopi, o se desideriamo sfruttare alcuni tipi di colonne del database meno comuni, possiamo creare la nostra classe di campo. 
+
+La spiegazione completa della creazione di campi personalizzati è fornita in:
+
+	https://docs.djangoproject.com/en/4.0/howto/custom-model-fields/
+
+
+Opzioni Meta
+------------
+
+Queste opzioni forniscono i metadati del nostro modello usando la classe interna Meta, in questo modo:
+
+	from django.db import models
+
+	class Ox(models.Model):
+		horn_length = models.IntegerField()
+
+		class Meta:
+			ordering = ["horn_length"]
+			verbose_name_plural = "oxen"
+
+I metadati del modello sono "tutto ciò che non è un campo", come le opzioni di ordinamento (ordering), il nome della tabella del database (db_table) o i nomi singolari e plurali leggibili (verbose_name e verbose_name_plural). Nessuno di questi elementi è richiesto e l'aggiunta a un modello class Meta è completamente facoltativa.
+
+Un elenco completo di tutte le opzioni Meta possibili può essere trovato in:
+
+	https://docs.djangoproject.com/en/4.0/ref/models/options/
+
+
+Attributi del modello
+---------------------
+
+L'attributo più importante di un modello è il Manager. 
+
+È l'interfaccia attraverso la quale le operazioni di query del database vengono fornite ai modelli Django e viene utilizzata per recuperare le istanze dal database. Se non è stata definita alcuna personalizzazione Manager, il nome predefinito è "objects". I gestori sono accessibili solo tramite le classi del modello, non le istanze del modello.
+
+Per impostazione predefinita, Django aggiunge una Manager con il nome objects a ogni classe di modello Django. Tuttavia, se si desidera utilizzare objects come nome di campo o se si desidera utilizzare un nome diverso da objects, è possibile rinominare Manager in base al modello. Per rinominare il Managerper una determinata classe, bisogna definire un attributo di classe di tipo models.Manager() su quel modello. Per esempio:
+
+	from django.db import models
+
+	class Person(models.Model):
+		#...
+		people = models.Manager()
+	
+L'utilizzo di questo modello di esempio Person.objects genererà un'eccezione AttributeError, ma Person.people.all() fornirà un elenco di tutti gli oggetti Person.
+
+
+Metodi del modello
+------------------
+
+Definiamo metodi personalizzati su un modello per aggiungere funzionalità personalizzate "a livello di riga" ai nostri oggetti. 
+
+Mentre i metodi Manager sono destinati a fare cose "a livello di tabella", i metodi del modello dovrebbero agire su una particolare istanza del modello.
+
+Questa è una tecnica preziosa per mantenere la logica di business in un unico posto, ovvero il modello.
+
+Ad esempio, questo modello ha alcuni metodi personalizzati:
+
+	from django.db import models
+
+	class Person(models.Model):
+		first_name = models.CharField(max_length=50)
+		last_name = models.CharField(max_length=50)
+		birth_date = models.DateField()
+
+		def baby_boomer_status(self):
+			"Returns the person's baby-boomer status."
+			import datetime
+			if self.birth_date < datetime.date(1945, 8, 1):
+				return "Pre-boomer"
+			elif self.birth_date < datetime.date(1965, 1, 1):
+				return "Baby boomer"
+			else:
+				return "Post-boomer"
+
+		@property
+		def full_name(self):
+			"Returns the person's full name."
+			return '%s %s' % (self.first_name, self.last_name)
+
+L'ultimo metodo in questo esempio è una proprietà.
+
+Maggiori riferimenti alle possibili istanze e l'elenco dei metodi assegnati automaticamente a ciascun modello possiamo trovarli rispettivamente qui:
+
+	https://docs.djangoproject.com/en/4.0/ref/models/instances/
+	https://docs.djangoproject.com/en/4.0/ref/models/instances/#model-instance-methods
+	
+Possiamo eseguire l'verride della maggior parte di questi come descritto in ...
+
+	https://docs.djangoproject.com/en/4.0/topics/db/models/#overriding-predefined-model-methods
+	
+... ma ce ne sono un paio che vorremo quasi sempre definire:
+
+
+__str__() 
+
+	Un "metodo magico" Python che restituisce una rappresentazione in stringa di qualsiasi oggetto. Questo è ciò che Python e Django utilizzeranno ogni volta che un'istanza del modello deve essere forzata e visualizzata come una stringa semplice. In particolare, ciò accade quando visualizzi un oggetto in una console interattiva o nell'amministratore.
+
+	from django.db import models
+
+	class Person(models.Model):
+		first_name = models.CharField(max_length=50)
+		last_name = models.CharField(max_length=50)
+
+		def __str__(self):
+			return '%s %s' % (self.first_name, self.last_name)
+
+	Spessi su usa definire questo metodo, l'impostazione predefinita non è molto utile.
+
+
+get_absolute_url()
+
+	Questo dice a Django come calcolare l'URL per un oggetto. Django lo usa nella sua interfaccia di amministrazione e ogni volta che ha bisogno di definire un URL per un oggetto. Qualsiasi oggetto con un URL che lo identifichi in modo univoco dovrebbe definire questo metodo. Esempio:
+	
+	def get_absolute_url(self):
+		return "/people/%i/" % self.id
+	
+
+Override dei metodi di modello predefiniti
+------------------------------------------
+
+C'è un altro insieme di metodi di modello che incapsulano una serie di comportamenti del database che vorremo personalizzare. In particolare vorremo spesso cambiare modo di lavorare di save() e delete().
+
+Siamo liberi di sovrascrivere questi metodi (e qualsiasi altro metodo del modello) per alterarne il comportamento.
+
+Un classico caso d'uso per sovrascrivere i metodi integrati è se si desidera che accada qualcosa ogni volta che si salva un oggetto. Ad esempio (vedi save() per la documentazione dei parametri accettati):
+
+	from django.db import models
+
+	class Blog(models.Model):
+		name = models.CharField(max_length=100)
+		tagline = models.TextField()
+
+		def save(self, *args, **kwargs):
+			do_something()
+			super().save(*args, **kwargs)  # Call the "real" save() method.
+			do_something_else()
+
+Possiamo anche impedire il salvataggio:
+
+	from django.db import models
+
+	class Blog(models.Model):
+		name = models.CharField(max_length=100)
+		tagline = models.TextField()
+
+		def save(self, *args, **kwargs):
+			if self.name == "Yoko Ono's blog":
+				return # Yoko shall never have her own blog!
+			else:
+				super().save(*args, **kwargs)  # Call the "real" save() method.
+
+È importante ricordare di chiamare il metodo della superclasse - che è il business di super().save(*args, **kwargs) - per assicurarsi che l'oggetto venga comunque salvato nel database; dimentichiamo di chiamare il metodo della superclasse, il comportamento predefinito non si verificherà e il database non verrà toccato.
+
+È anche importante passare attraverso gli argomenti che possono essere passati al metodo del modello - che è quello che fa il bit *args, **kwargs*args, **kwargs. Django, di volta in volta, estenderà le capacità dei metodi di modello integrati, aggiungendo nuovi argomenti; se si usano le definizioni dei metodi, abbiamo la garanzia che il nostro codice supporterà automaticamente quegli argomenti quando vengono aggiunti.
+
+Nota: I metodi del modello sovrascritti non vengono chiamati nelle operazioni in blocco.
+
+Si noti che il metodo delete() per un oggetto non viene necessariamente chiamato quando si eliminano oggetti in blocco utilizzando un QuerySet o come risultato di un "cascadin delete". Per garantire che la logica di eliminazione personalizzata venga eseguita, è possibile utilizzare segnali deletepre_delete e/o post_delete.
+
+Sfortunatamente, non esiste una soluzione alternativa quando si creano o si fa l'update di oggetti in blocco, finchè non si effettuano chiamate save(), pre_save, e post_save.
+
+
+Esecuzione di SQL personalizzati (raw SQL)
+------------------------------------------
+
+Un altro modello comune è la scrittura di istruzioni SQL personalizzate nei metodi del modello e nei metodi a livello di modulo. Per ulteriori dettagli sull'utilizzo dell'SQL non elaborato, vedere la documentazione sull'utilizzo dell'SQL non elaborato:
+
+	https://docs.djangoproject.com/en/4.0/topics/db/sql/
+
+
+Ereditarietà del modello
+------------------------
+
+L'ereditarietà del modello in Django funziona in modo quasi identico al modo in cui funziona la normale ereditarietà delle classi in Python, ma le basi all'inizio della pagina dovrebbero comunque essere seguite. Ciò significa che la classe base dovrebbe essere una sottoclasse di django.db.models.Model.
+
+L'unica decisione da prendere è se vogliamo che i modelli padre siano modelli a pieno titolo (con le proprie tabelle di database) o se i genitori sono solo detentori di informazioni comuni che saranno visibili solo attraverso i modelli figlio.
+
+Ci sono tre stili di eredità possibili in Django:
+
+	1. Spesso, vorremo semplicemente usare la classe genitore per contenere le informazioni che non vogliamo dover digitare per ogni modello figlio. Questa classe non verrà mai utilizzata isolatamente, quindi le classi base astratte sono ciò che stiamo cercando:
+	
+		https://docs.djangoproject.com/en/4.0/topics/db/models/#abstract-base-classes
+
+	2. Se stiamo subclassando un modello esistente (forse qualcosa interamente da un'altra applicazione) e desideriamo che ogni modello abbia la propria tabella di database, l'ereditarietà multi-tabella è la strada da percorrere:
+	
+		https://docs.djangoproject.com/en/4.0/topics/db/models/#multi-table-inheritance
+	
+	3. Infine, se vogliamo modificare solo il comportamento a livello di Python di un modello, senza modificare in alcun modo i campi dei modelli, possiamo utilizzare Proxy models:
+		
+		https://docs.djangoproject.com/en/4.0/topics/db/models/#proxy-models
+	
+
+[ Classi di base astratte ]
+
+Le classi base astratte sono utili quando si desidera inserire alcune informazioni comuni in una serie di altri modelli. 
+
+Scriviamo la nostra classe base e inseriamo abstract=True nella classe Meta. Questo modello non verrà quindi utilizzato per creare alcuna tabella di database. 
+
+Quando invece viene utilizzata come classe base per altri modelli, i suoi campi verranno aggiunti a quelli della classe figlia. Un esempio:
+
+	from django.db import models
+
+	class CommonInfo(models.Model):
+		name = models.CharField(max_length=100)
+		age = models.PositiveIntegerField()
+
+		class Meta:
+			abstract = True
+
+	class Student(CommonInfo):
+		home_group = models.CharField(max_length=5)
+
+Il modello Student avrà tre campi: name, age e home_group. Il modello CommonInfo non può essere utilizzato come un normale modello Django, poiché è una classe base astratta. Non genera una tabella di database né dispone di un manager e non può essere istanziato o salvato direttamente.
+
+I campi ereditati dalle classi base astratte possono essere sovrascritti con un altro campo o valore oppure essere rimossi con None.
+
+Per molti usi, questo tipo di eredità del modello sarà esattamente quello che desideriamo; fornisce un modo per scomporre le informazioni comuni a livello di Python, creando allo stesso tempo solo una tabella di database per modello figlio a livello di database.
+
+
+[ ereditarietà di Meta ]
+
+Quando viene creata una classe base astratta, Django rende disponibile come attributo qualsiasi la classe interna Meta che abbiamo dichiarato nella classe base. Se una classe figlia non dichiara la propria classe Meta, erediterà la Meta. Se la child vuole estendere la classe Meta parent, può sottoclassarla. Per esempio:
+
+	from django.db import models
+
+	class CommonInfo(models.Model):
+		# ...
+		class Meta:
+			abstract = True
+			ordering = ['name']
+
+	class Student(CommonInfo):
+		# ...
+		class Meta(CommonInfo.Meta):
+			db_table = 'student_info'
+
+Django apporta una modifica alla classe Meta di una classe base astratta, e prima di installare l'attributo Meta, imposta abstract=False.
+
+Ciò significa che le classi figlie di classi base astratte non diventano automaticamente classi astratte a loro volta. Per creare una classe base astratta che erediti da un'altra classe base astratta, è necessario impostare esplicitamente abstract=True nella classe figlia.
+
+Alcuni attributi non hanno senso che siano inclusi nella classe Meta di una classe base astratta; ad esempio, l'inclusione di db_table significherebbe che tutte le classi figlie (quelle che non specificano il proprio Meta) userebbero la stessa tabella del database, che quasi certamente non è quello che vogliamo.
+
+A causa del modo in cui funziona l'ereditarietà di Python, se una classe figlia eredita da più classi base astratte, solo le opzioni Meta dalla PRIMA classe elencata verranno ereditate per impostazione predefinita. Per ereditare le opzioni Meta da più classi base astratte, dobbiamo dichiarare esplicitamente l' ereditarietà Meta. Per esempio:
+
+	from django.db import models
+
+	class CommonInfo(models.Model):
+		name = models.CharField(max_length=100)
+		age = models.PositiveIntegerField()
+
+		class Meta:
+			abstract = True
+			ordering = ['name']
+
+	class Unmanaged(models.Model):
+		class Meta:
+			abstract = True
+			managed = False
+
+	class Student(CommonInfo, Unmanaged):
+		home_group = models.CharField(max_length=5)
+
+		class Meta(CommonInfo.Meta, Unmanaged.Meta):
+			pass
+
+
+Facciamo attenzione a related_name e related_query_name.
+
+Se si utilizza related_name o related_query_name su un ForeignKey o ManyToManyField, è necessario specificare sempre un nome inverso univoco e un nome di query per il campo. Ciò normalmente causerebbe un problema nelle classi base astratte, poiché i campi di questa classe sono inclusi in ciascuna delle classi figlie, ogni volta con esattamente gli stessi valori per gli attributi (inclusi related_name e related_query_name).
+
+Per aggirare questo problema, quando si utilizza related_name o related_query_name in una classe base astratta (soltanto), parte del valore deve contenere '%(app_label)s' e '%(class)s'.
+
+	- '%(class)s'viene sostituito dal nome minuscolo della classe figlia in cui viene utilizzato il campo.
+	
+	- '%(app_label)s'è sostituito dal nome minuscolo dell'app in cui è contenuta la classe figlia. Ogni nome dell'applicazione installata deve essere univoco e anche i nomi delle classi del modello all'interno di ogni app devono essere univoci, quindi il nome risultante finirà per essere diverso.
+
+Ad esempio, data un'app common/models.py...
+
+	from django.db import models
+
+	class Base(models.Model):
+		m2m = models.ManyToManyField(
+			OtherModel,
+			related_name="%(app_label)s_%(class)s_related",
+			related_query_name="%(app_label)s_%(class)ss",
+		)
+
+		class Meta:
+			abstract = True
+
+	class ChildA(Base):
+		pass
+
+	class ChildB(Base):
+		pass
+
+... insieme ad un'altra app rare/models.py:
+
+	from common.models import Base
+
+	class ChildB(Base):
+		pass
+
+Il nome inverso del campo common.ChildA.m2m sarà "common_childa_related" e il nome della query inversa sarà "common_childas"; il nome inverso del campo common.ChildB.m2m sarà "common_childb_related" e il nome della query inversa sarà "common_childbs"; infine, il nome inverso del campo rare.ChildB.m2m sarà "rare_childb_related" e il nome della query inversa sarà "rare_childbs". 
+
+Sta a noi come utilizzare la porzione '%(class)s' e '%(app_label)s' per costruire il nostro nome correlato o il nome della query correlata, ma se ci dimentichiamo di usarlo, Django genererà errori quando esegui controlli di sistema (o esegui migrate).
+
+Se non specifichi un attributo related_name per un campo in una classe base astratta, il nome inverso predefinito sarà il nome della classe figlia seguito da '_set', proprio come sarebbe normalmente se avessi dichiarato il campo direttamente sulla classe figlia . Ad esempio, nel codice precedente, se l'attributo related_name è stato omesso, il nome inverso per il campo m2m  sarebbe "childa_set" nel caso di ChildA e "childb_set" per il campo ChildB.
+
+
+[ Ereditarietà multitabella ]
+
+Il secondo tipo di eredità del modello supportato da Django è quando ogni modello nella gerarchia è un modello a sé stante. 
+
+Ogni modello corrisponde alla propria tabella del database e può essere interrogato e creato individualmente. La relazione di eredità introduce collegamenti tra il modello figlio e ciascuno dei suoi genitori (tramite un OneToOneField). Per esempio:
+
+	from django.db import models
+
+	class Place(models.Model):
+		name = models.CharField(max_length=50)
+		address = models.CharField(max_length=80)
+
+	class Restaurant(Place):
+		serves_hot_dogs = models.BooleanField(default=False)
+		serves_pizza = models.BooleanField(default=False)
+
+Tutti i campi di Place saranno disponibili anche in Restaurant, sebbene i dati risiedano in una tabella di database diversa. Quindi questi approcci sono entrambi possibili:
+
+	>>> Place.objects.filter(name="Bob's Cafe")
+	>>> Restaurant.objects.filter(name="Bob's Cafe")
+
+Se abbiamo Place che è anche un Restaurant, possiamo passare dall'oggetto Place all'oggetto Restaurant usando la versione minuscola del nome del modello:
+
+	>>> p = Place.objects.get(id=12)
+
+Se p è un oggetto Restaurant, questo restituisce la classe figlia:
+
+	>>> p.restaurant
+		<Restaurant: ...>
+
+Tuttavia, se nell'esempio precedente "p" non fosse un Restaurant (era stato creato direttamente come oggetto Place o era il genitore di un'altra classe), fare riferimento a p.restaurant solleverebbe un'eccezione Restaurant.DoesNotExist.
+
+Il OneToOneField creato automaticamente su Restaurant che lo collega a Place assomiglia a questo:
+
+	place_ptr = models.OneToOneField(
+		Place, on_delete=models.CASCADE,
+		parent_link=True,
+		primary_key=True,
+	)
+
+Possiamo sovrascrivere quel campo dichiarando il nostro OneToOneField con parent_link=True su Restaurant.
+
+
+[ Meta e eredità multitabella ]
+
+Nella situazione di ereditarietà a più tabelle, non ha senso che una classe figlia erediti dalla classe Meta del genitore. 
+
+Tutte le opzioni Meta sono già state applicate alla classe genitore e applicarle di nuovo ovviamente porterebbe solo a comportamenti contraddittori (questo è in contrasto con il caso astratto della classe base, dove la classe base non esiste di per sé).
+
+Quindi un modello figlio non ha accesso alla classe Meta del suo genitore. Tuttavia, ci sono alcuni casi limitati in cui il figlio eredita il comportamento dal genitore; se il figlio non specifica un attributo ordering o un attributo get_latest_by, li erediterà dal suo genitore.
+
+Se il genitore ha un ordinamento e non vogliamo che il figlio abbia un ordinamento naturale, possiamo disabilitarlo esplicitamente:
+
+	class ChildModel(ParentModel):
+		# ...
+		class Meta:
+			# Remove parent's ordering effect
+			ordering = []
+		
+		
+[ Ereditarietà e relazioni inverse ]
+
+Poiché l'ereditarietà a più tabelle usa un implicito OneToOneField per collegare il figlio e il genitore, è possibile passare dal genitore al figlio, come nell'esempio precedente. 
+
+Tuttavia, questo utilizza il nome che è il valore predefinito related_name per ForeignKey e le relazioni ManyToManyField. Se stiamo inserendo questi tipi di relazioni su una sottoclasse del modello padre, dobbiamo specificare l'attributo related_name su ciascuno di questi campi. Se dimentichi di farlo, Django genererà un errore di convalida.
+
+Ad esempio, operando ancora sulla classe Place, creiamo un'altra sottoclasse con un ManyToManyField:
+
+	class Supplier(Place):
+		customers = models.ManyToManyField(Place)
+
+Ciò provoca l'errore:
+
+	Reverse query name for 'Supplier.customers' clashes with reverse query
+	name for 'Supplier.place_ptr'.
+
+	HINT: Add or change a related_name argument to the definition for
+	'Supplier.customers' or 'Supplier.place_ptr'.
+
+
+L'aggiunta related_name al campo customers come segue risolverebbe l'errore: 
+
+	customers = models.ManyToManyField(Place, related_name='provider')
+
+
+[ Specificare il campo del collegamento principale ]
+
+Come accennato, Django creerà automaticamente una classe OneToOneField che ricollegherà la nostra classe figlia a qualsiasi modello genitore non astratto. Se vogliamo controllare il nome dell'attributo che si ricollega alla classe padre, possiamo crearne uno nostro OneToOneField e impostarlo parent_link=True per indicare che il nostro campo è il collegamento alla classe padre.
+
+
+Modelli proxy
+-------------
+
+Quando si utilizza l'ereditarietà multitabella , viene creata una nuova tabella di database per ogni sottoclasse di un modello. 
+
+Questo è solitamente il comportamento desiderato, poiché la sottoclasse ha bisogno di una posizione in cui archiviare eventuali campi di dati aggiuntivi che non sono presenti nella classe base. A volte, tuttavia, vogliamo solo modificare il comportamento Python di un modello, magari per cambiare il gestore predefinito o aggiungere un nuovo metodo.
+
+L'ereditarietà del modello proxy serve a creare un proxy per il modello originale; possiamo creare, eliminare e aggiornare le istanze del modello proxy e tutti i dati verranno salvati come se stessi utilizzando il modello originale (non proxy). La differenza è che possiamo cambiare cose come l'ordinamento del modello predefinito o il gestore predefinito nel proxy, senza dover modificare l'originale.
+
+I modelli proxy sono dichiarati come modelli normali; diciamo a Django che si tratta di un modello proxy impostando l'attributo proxy della classe Meta su True.
+
+Si supponga, ad esempio, di voler aggiungere un metodo al modello Person. possiamo farlo in questo modo:
+
+	from django.db import models
+
+	class Person(models.Model):
+		first_name = models.CharField(max_length=30)
+		last_name = models.CharField(max_length=30)
+
+	class MyPerson(Person):
+		class Meta:
+			proxy = True
+
+		def do_something(self):
+			# ...
+			pass
+
+La classe MyPerson opera sulla stessa tabella del database della sua classe Personc padre. In particolare, eventuali nuove istanze di Person saranno accessibili anche tramite MyPerson e viceversa:
+
+	>>> p = Person.objects.create(first_name="foobar")
+	>>> MyPerson.objects.get(first_name="foobar")
+		<MyPerson: foobar>
+
+Possiamo anche utilizzare un modello proxy per definire un diverso ordinamento predefinito su un modello; potremmo non voler sempre ordinare il modello Person, ma ordinare regolarmente in base all'attributo last_name quando si usa il proxy:
+
+	class OrderedPerson(Person):
+		class Meta:
+			ordering = ["last_name"]
+			proxy = True
+
+Ora le query normali Person non saranno ordinate e le query OrderedPerson verranno ordinate per last_name.
+
+I modelli proxy ereditano gli attributi Meta allo stesso modo dei modelli normali .
+
+
+Non c'è modo di fare in modo che Django restituisca, diciamo, un oggetto MyPerson ogni volta che si interrogano gli oggetti Person; un set di query per gli oggetti Person restituirà quei tipi di oggetti. 
+
+Il punto centrale degli oggetti proxy è che il codice che si basa sull'originale Person li utilizzerà e il nostro codice può utilizzare le estensioni che abbiamo incluso (su cui nessun altro codice si basa comunque). Non è un modo per sostituire il modello Person (o qualsiasi altro) ovunque con qualcosa di nostra creazione.
+
+
+Un modello proxy deve ereditare esattamente da una classe di modello non astratta. Non è possibile ereditare da più modelli non astratti poiché il modello proxy non fornisce alcuna connessione tra le righe nelle diverse tabelle del database. 
+
+Un modello proxy può ereditare da un numero qualsiasi di classi di modelli astratti, a condizione che non definiscano alcun campo di modello. Un modello proxy può anche ereditare da un numero qualsiasi di modelli proxy che condividono una classe padre non astratta comune.
+
+
+Se non specifichi alcun gestore modello su un modello proxy, eredita i gestori dai suoi genitori modello. Se si definisce un manager sul modello proxy, diventerà l'impostazione predefinita, sebbene tutti i manager definiti nelle classi padre saranno ancora disponibili.
+
+Continuando il nostro esempio sopra, possiamo cambiare il gestore predefinito utilizzato quando esegui query sul modello Person in questo modo:
+
+	from django.db import models
+
+	class NewManager(models.Manager):
+		# ...
+		pass
+
+	class MyPerson(Person):
+		objects = NewManager()
+
+		class Meta:
+			proxy = True
+
+Se si desidera aggiungere un nuovo gestore al Proxy, senza sostituire il default esistente, è possibile utilizzare le tecniche descritte nella documentazione del gestore personalizzato:
+
+	https://docs.djangoproject.com/en/4.0/topics/db/managers/#custom-managers-and-inheritance
+
+Ecco come creare una classe base contenente i nuovi gestori ed ereditare quella dopo la classe base primaria:
+
+	# Create an abstract class for the new manager.
+	class ExtraManagers(models.Model):
+		secondary = NewManager()
+
+		class Meta:
+			abstract = True
+
+	class MyPerson(Person, ExtraManagers):
+		class Meta:
+			proxy = True
+
+Probabilmente non avremo bisogno di farlo molto spesso, ma, quando lo fai, è possibile.
+
+
+[ Differenze tra ereditarietà proxy e modelli non gestiti ]
+
+L'ereditarietà del modello proxy potrebbe sembrare abbastanza simile alla creazione di un modello non gestito, utilizzando l'attributo managed sulla classe Meta di un modello.
+
+Con un'impostazione attenta Meta.db_table è possibile creare un modello non gestito che oscura un modello esistente e aggiunge metodi Python ad esso. Tuttavia, sarebbe molto ripetitivo e fragile poiché è necessario mantenere sincronizzate entrambe le copie se si apportano modifiche.
+
+D'altra parte, i modelli proxy sono pensati per comportarsi esattamente come il modello per cui stanno delegando (proxy=delegare). Sono sempre sincronizzati con il modello padre poiché ne ereditano direttamente i campi e i gestori.
+
+Le regole generali sono:
+
+	1. Se stiamo eseguendo il mirroring di un modello esistente o di una tabella di database e non desideri tutte le colonne della tabella di database originali, usiamo Meta.managed=False. Questa opzione è normalmente utile per modellare viste e tabelle di database non sotto il controllo di Django.
+	
+	2. Se vogliamo modificare il comportamento solo Python di un modello, ma mantenere tutti gli stessi campi dell'originale, usiamo Meta.proxy=True. Questo imposta le cose in modo che il modello proxy sia una copia esatta della struttura di archiviazione del modello originale quando i dati vengono salvati.
+
+
+Ereditarietà multipla
+---------------------
+
+Proprio come con la sottoclasse di Python, è possibile che un modello Django erediti da più modelli padre. Teniamo presente che si applicano le normali regole di risoluzione dei nomi Python. La prima classe base in cui compare un nome particolare (es. Meta) sarà quella usata; questo significa, ad esempio, che se più genitori contengono una classe Meta, verrà utilizzata solo la prima e tutte le altre verranno ignorate.
+
+In genere, non è necessario ereditare da più genitori. Il caso d'uso principale in cui ciò è utile è per le classi "mix-in": aggiungere un particolare campo o metodo aggiuntivo a ogni classe che eredita il mix-in. Cerchiamo allora di mantenere le nostre gerarchie di eredità il più semplice e lineare possibile in modo da non dover faticare per capire da dove proviene una particolare informazione.
+
+Si noti che l'ereditarietà da più modelli che hanno un campo chiave primaria "id" comune genererà un errore. Per utilizzare correttamente l'ereditarietà multipla, possiamo utilizzare un esplicito AutoField nei modelli di base:
+
+	class Article(models.Model):
+		article_id = models.AutoField(primary_key=True)
+		...
+
+	class Book(models.Model):
+		book_id = models.AutoField(primary_key=True)
+		...
+
+	class BookReview(Book, Article):
+		pass
+	
+Oppure usa un antenato comune per tenere l'AutoField. Ciò richiede l'utilizzo di un modello esplicito OneToOneField da ciascun modello padre all'antenato comune per evitare uno scontro tra i campi generati ed ereditati automaticamente dal figlio:
+
+	class Piece(models.Model):
+		pass
+
+	class Article(Piece):
+		article_piece = models.OneToOneField(Piece, on_delete=models.CASCADE, parent_link=True)
+		...
+
+	class Book(Piece):
+		book_piece = models.OneToOneField(Piece, on_delete=models.CASCADE, parent_link=True)
+		...
+
+	class BookReview(Book, Article):
+		pass
+
+
+Il nome del campo "hiding" non è consentito
+-------------------------------------------
+
+Nella normale ereditarietà delle classi Python, è consentito per una classe figlia sovrascrivere qualsiasi attributo dalla classe genitore. In Django, questo di solito non è consentito per i campi modello. Se una classe base del modello non astratta ha un campo chiamato author, non possiamo creare un altro campo del modello o definire un attributo chiamato author in una classe che eredita da quella classe base.
+
+Questa restrizione non si applica ai campi del modello ereditati da un modello astratto. Tali campi possono essere sovrascritti con un altro campo o valore o essere rimossi impostando .field_name = None
+
+Attenzione:  I gestori dei modelli vengono ereditati dalle classi base astratte. L'override di un campo ereditato a cui fa riferimento un campo ereditato Manager può causare bug difficili da individuare. Vedi gestori personalizzati e ereditarietà del modello:
+
+	https://docs.djangoproject.com/en/4.0/topics/db/managers/#custom-managers-and-inheritance
+
+Nota:  Alcuni campi definiscono attributi aggiuntivi sul modello, ad esempio a ForeignKey definisce un attributo aggiuntivo con _id "aggiunto" al nome del campo, così come related_name e related_query_name sul modello esterno. Questi attributi aggiuntivi non possono essere sovrascritti a meno che il campo che li definisce non venga modificato o rimosso in modo che non definisca più l'attributo aggiuntivo.
+
+L'override dei campi in un modello padre comporta difficoltà in aree quali l'inizializzazione di nuove istanze (specificando quale campo viene inizializzato in Model.__init__) e la serializzazione. 
+
+Queste sono caratteristiche che la normale eredità della classe Python non deve affrontare nello stesso modo, quindi la differenza tra l'ereditarietà del modello Django e l'ereditarietà della classe Python non è arbitraria.
+
+Questa restrizione si applica solo agli attributi che sono istanze Field. Gli attributi Python normali possono essere sovrascritti se lo si desidera. Si applica anche solo al nome dell'attributo come lo vede Python: se stiamo specificando manualmente il nome della colonna del database, possiamo avere lo stesso nome della colonna che appare sia in un modello figlio che in un modello predecessore per l'ereditarietà multi-tabella (sono colonne in due diverse tabelle di database).
+
+Django solleverà un FieldError se si sovrascrive qualsiasi campo modello in qualsiasi modello antenato.
+
+Si noti che a causa del modo in cui i campi vengono risolti durante la definizione della classe, i campi del modello ereditati da più modelli padre astratti vengono risolti in un rigoroso ordine di profondità. Ciò contrasta con lo standard Python MRO, che viene risolto in ampiezza nei casi di ereditarietà a forma di diamante. Questa differenza riguarda solo le gerarchie di modelli complesse, che (come indicato sopra) dovresti cercare di evitare.
+
+
+Organizzare i modelli in un pacchetto
+-------------------------------------
+
+Il comando  "manage.py startappmodels.py" crea una struttura dell'applicazione che include un file models.py. 
+
+Se abbiamo molti modelli, può essere utile organizzarli in file separati.
+
+Per farlo, possiamo creare un pacchetto models. Rimuoviamo models.py e creiamo una directory myapp/models/ con un file __init__.py e i file in cui archiviare i nostri modelli. Dobbiamo importare i modelli nel file __init__.py.
+
+Ad esempio, se avessimo organic.py e synthetic.py nella directory models avremo in mypp/models/__init__.py ...
+
+	from .organic import Person
+	from .synthetic import Robot
+
+L'importazione esplicita di ciascun modello anziché l'utilizzo di  .from .models import *  presenta il vantaggio di non ingombrare lo spazio dei nomi, rendere il codice più leggibile e mantenere utili gli strumenti di analisi del codice.
+
+
+Vedasi inoltre il riferimento alle API relative al modello, inclusi i campi del modello, gli oggetti correlati e QuerySet:
+
+	https://docs.djangoproject.com/en/4.0/ref/models/
+	
+
+
+ESEGUIRE QUERY
+--------------
+
+Dopo aver creato i nostri modelli di dati, Django ci fornisce automaticamente un'API di estrazione del database che ci consente di creare, recuperare, aggiornare ed eliminare oggetti. Questo documento spiega come utilizzare questa API. Fare riferimento al riferimento del modello di dati per i dettagli completi di tutte le varie opzioni di ricerca del modello.
+
+In questa guida, faremo riferimento ai seguenti modelli, che comprendono un'applicazione blog:
+
+	from datetime import date
+
+	from django.db import models
+
+	class Blog(models.Model):
+		name = models.CharField(max_length=100)
+		tagline = models.TextField()
+
+		def __str__(self):
+			return self.name
+
+	class Author(models.Model):
+		name = models.CharField(max_length=200)
+		email = models.EmailField()
+
+		def __str__(self):
+			return self.name
+
+	class Entry(models.Model):
+		blog = models.ForeignKey(Blog, on_delete=models.CASCADE)
+		headline = models.CharField(max_length=255)
+		body_text = models.TextField()
+		pub_date = models.DateField()
+		mod_date = models.DateField(default=date.today)
+		authors = models.ManyToManyField(Author)
+		number_of_comments = models.IntegerField(default=0)
+		number_of_pingbacks = models.IntegerField(default=0)
+		rating = models.IntegerField(default=5)
+
+		def __str__(self):
+			return self.headline
+
+
+Creare oggetti
+--------------
+
+Per rappresentare i dati di una tabella di database negli oggetti Python, Django utilizza un sistema intuitivo, una classe modello che rappresenta una tabella di database e un'istanza di quella classe rappresenta un particolare record nella tabella di database.
+
+Per creare un oggetto, andiamo a crearne una istanza utilizzando gli argomenti delle parole chiave nella classe del modello, quindi chiamiamo save() per salvarlo nel database.
+
+Supponendo che i modelli risiedano in un file mysite/blog/models.py, ecco un esempio:
+
+	>>> from blog.models import Blog
+	>>> b = Blog(name='Beatles Blog', tagline='All the latest Beatles news.')
+	>>> b.save()
+
+Questo esegue un'istruzione INSERTSQL dietro le quinte; Django non tocca il database finché non chiami esplicitamente save().
+
+Il metodo save() non genera valore di ritorno e accetta una serie di opzioni avanzate non descritte qui. Vedere la documentazione per save()i dettagli completi:
+
+	https://docs.djangoproject.com/en/4.0/ref/models/instances/#django.db.models.Model.save
+
+
+Per creare e salvare un oggetto in un unico passaggio, utilizzare il metodo create(); ad esempio il metodo ...
+
+	p = Person.objects.create(first_name="Bruce", last_name="Springsteen")
+
+... e il metodo ...
+
+	p = Person(first_name="Bruce", last_name="Springsteen")
+	p.save(force_insert=True)
+
+... sono equivalenti.
+
+Data un'istanza Blog b5 che è già stata salvata nel database, questo esempio cambia il suo nome e aggiorna il suo record nel database:
+
+	>>> b5.name = 'New name'
+	>>> b5.save()
+
+Questo esegue un'istruzione UPDATESQL e Django non tocca il database finché non chiamiamo esplicitamente save().
+
+Salvataggio in presenza di ForeignKey e ManyToManyField
+-------------------------------------------------------
+
+L' aggiornamento di un campo ForeignKey funziona esattamente come il salvataggio di un campo normale, cioè assegna un oggetto del tipo corretto al campo in questione. Questo esempio aggiorna l'attributo blog di un'istanza Entry chiamata entry, presupponendo che le istanze appropriate di Entry e Blog siano già salvate nel database (quindi possiamo recuperarle di seguito):
+
+	>>> from blog.models import Blog, Entry
+	>>> entry = Entry.objects.get(pk=1)
+	>>> cheese_blog = Blog.objects.get(name="Cheddar Talk")
+	>>> entry.blog = cheese_blog
+	>>> entry.save()
+
+L' aggiornamento di un ManyToManyField funziona in modo leggermente diverso; esso usa il metodo add() sul campo per aggiungere un record alla relazione. Questo esempio aggiunge l'istanza Author chiamata joe all'oggetto entry:
+
+	>>> from blog.models import Author
+	>>> joe = Author.objects.create(name="Joe")
+	>>> entry.authors.add(joe)
+
+Per aggiungere più record ManyToManyField in una volta sola, includiamo più argomenti nella chiamata a add(), in questo modo:
+
+	>>> john = Author.objects.create(name="John")
+	>>> paul = Author.objects.create(name="Paul")
+	>>> george = Author.objects.create(name="George")
+	>>> ringo = Author.objects.create(name="Ringo")
+	>>> entry.authors.add(john, paul, george, ringo)
+
+Django si lamenterà se provi ad assegnare o aggiungere un oggetto del tipo sbagliato.
+
+
+Recupero di oggetti
+-------------------
+
+Per recuperare oggetti dal nostro database, costruiamio un QuerySet tramite un Manager sulla nostra classe modello.
+
+Un QuerySet rappresenta una raccolta di oggetti dal database; può avere zero, uno o più filtri; i filtri restringono i risultati della query in base ai parametri specificati; in termini SQL, una QuerySet equivale a un'istruzione SELECT e un filtro è una clausola limitante come WHERE o LIMIT.
+
+Ottieni un QuerySet usando il nostro modello Manager; ogni modello ne ha almeno uno e Manager viene chiamato objects per impostazione predefinita. Accediamo direttamente tramite la classe modello, in questo modo:
+
+	>>> Blog.objects
+		<django.db.models.manager.Manager object at ...>
+	>>> b = Blog(name='Foo', tagline='Bar')
+	>>> b.objects
+		Traceback:
+			...
+		AttributeError: "Manager isn't accessible via Blog instances."
+
+Nota: i Managers sono accessibili solo tramite classi di modello, piuttosto che da istanze di modello, per imporre una separazione tra operazioni "a livello di tabella" e operazioni a "livello di record".
+
+Il Manager è la fonte principale di QuerySets per un modello.
+
+Il modo più semplice per recuperare oggetti da una tabella è infatti ottenerli tutti. Per fare ciò, dobbiamo utilizzare il metodo all() sul Manager; ad esempio, Blog.objects.all() restituisce una QuerySet che contiene tutti gli oggetti Blog nel database.
+
+	>>> all_entries = Entry.objects.all()
+
+
+Il QuerySetrestituito da all() descrive tutti gli oggetti nella tabella del database; di solito, però, dovremmo selezionare solo un sottoinsieme dell'insieme completo di oggetti.
+
+Per creare un tale sottoinsieme, rifiniamo la QuerySet iniziale, aggiungendo condizioni di filtro; i due modi più comuni per perfezionare una QuerySet sono:
+
+	filter(**kwargs) 	Restituisce un nuovo QuerySetoggetto contenente gli 
+						oggetti che corrispondono ai parametri di ricerca.
+
+	exclude(**kwargs)	Restituisce un nuovo QuerySetoggetto contenente 
+						oggetti che non corrispondono ai parametri di ricerca.
+
+I parametri di ricerca (**kwargs nelle definizioni delle funzioni precedenti) devono essere nel formato descritto in Ricerche sui campi, meglio descritte in seguito.
+
+Ad esempio, per ottenere una QuerySet delle voci di blog dell'anno 2006, utilizzare filter() in questo modo:
+
+	Entry.objects.filter(pub_date__year=2006)
+
+Con la classe manager predefinita, che è simile a ...
+
+	Entry.objects.all().filter(pub_date__year=2006)
+
+
+Filtri di concatenamento
+------------------------
+
+Il risultato del filtro operato da una QuerySet (raffinamento) è esso stesso un QuerySet, quindi è possibile concatenare i risultati insieme. Per esempio:
+
+	>>> Entry.objects.filter(
+		...     headline__startswith='What'
+		... ).exclude(
+		...     pub_date__gte=datetime.date.today()
+		... ).filter(
+		...     pub_date__gte=datetime.date(2005, 1, 30)
+		... )
+
+Questo prende l'iniziale QuerySet di tutte le voci nel database, aggiunge un filtro, quindi un'esclusione, quindi un altro filtro; il risultato finale è un QuerySet contenente tutte le voci con un titolo che inizia con "What", pubblicate tra il 30 gennaio 2005 e il giorno corrente.
+
+
+I messaggi filtrati QuerySet sono unici.
+
+Ogni volta che raffini un QuerySet, ottieni un nuovo QuerySet di zecca che non è in alcun modo legato al precedente QuerySet; ogni raffinamento crea un oggetto separato e distinto QuerySet che può essere archiviato, utilizzato e riutilizzato.
+
+Esempio:
+
+	>>> q1 = Entry.objects.filter(headline__startswith="What")
+	>>> q2 = q1.exclude(pub_date__gte=datetime.date.today())
+	>>> q3 = q1.filter(pub_date__gte=datetime.date.today())
+
+Questi tre QuerySets sono separati; il primo è una base QuerySet contenente tutte le voci che contengono un titolo che inizia con "What"; il secondo è un sottoinsieme del primo, con un criterio aggiuntivo che esclude i record i cui pub_date (date di pubblicazione - ndr) sono presenti o future; il terzo è un sottoinsieme del primo, con un criterio aggiuntivo che seleziona solo i record con pub_date di oggi o future; l'iniziale QuerySet (q1) non è influenzata dal processo di raffinamento.
+
+Da un certo punto di vista possiamo dire che i QuerySets sono pigri (lazy); l'atto di creare un QuerySet non implica alcuna attività da parte del database; possiamo impilare i filtri insieme tutto il giorno e Django non eseguirà effettivamente la query finché il QuerySet non viene valutato; osserviamo questo esempio:
+
+	>>> q = Entry.objects.filter(headline__startswith="What")
+	>>> q = q.filter(pub_date__lte=datetime.date.today())
+	>>> q = q.exclude(body_text__icontains="food")
+	>>> print(q)
+
+Sebbene assomigli a tre accessi al database, in realtà viene interrogato il database solo una volta, nell'ultima riga (print(q)); in generale, i risultati di una QuerySet non vengono recuperati dal database fino a quando non vengono "chiesti"; quando lo facciamo, QuerySet viene valutata accedendo al database; per ulteriori dettagli sul momento esatto in cui viene eseguita la valutazione, vedere Quando vengono valutati i QuerySet.
+
+
+Recupero di un singolo oggetto con get()
+----------------------------------------
+
+Il metodo filter() darà sempre un QuerySet, anche se solo un singolo oggetto corrisponde alla query - in questo caso, sarà un QuerySet contenente un singolo elemento.
+
+Se sappiamo che esiste un solo oggetto che corrisponde alla nostra query, possiamo utilizzare il metodo get() su un Manager che restituisce direttamente l'oggetto:
+
+	>>> one_entry = Entry.objects.get(pk=1)
+
+Puoi utilizzare qualsiasi espressione di query con get(), proprio come con filter() (vedasi quanto specificato per i campi di ricerca più avanti), ma si noti che esiste una differenza tra l'utilizzo get() e l'utilizzo filter() con una porzione di [0]. 
+
+Se non ci sono risultati che corrispondono alla query, get() verrà sollevata un'eccezione DoesNotExist; questa eccezione è un attributo della classe del modello su cui viene eseguita la query, quindi nel codice sopra, se non è presente alcun oggetto Entry con una chiave primaria di 1, Django solleverà Entry.DoesNotExist.
+
+Allo stesso modo, Django si lamenterà se più di un elemento corrisponde alla query get() e in questo caso, solleverà una eccezione di tipo MultipleObjectsReturned, che è di nuovo un attributo della classe modello stessa.
+
+
+La maggior parte delle volte utilizzerai all(), get() e quando avremo bisogno filter() ed exclude() per cercare oggetti dal database.
+
+Tuttavia, vi è molto altro; vedere la "QuerySet API Reference" per un elenco completo di tutti i vari QuerySetmetodi:
+
+	https://docs.djangoproject.com/en/4.0/ref/models/querysets/#queryset-api
+
+
+Limitare QuerySets
+------------------
+
+Usiamo un sottoinsieme della sintassi di slicing dell'array di Python per limitare il nostro QuerySet ad un certo numero di risultati. Questo è l'equivalente in SQL delle clausole LIMIT e OFFSET.
+
+Ad esempio, questo restituisce i primi 5 oggetti (LIMIT 5):
+
+	>>> Entry.objects.all()[:5]
+
+Questo restituisce dal sesto al decimo oggetto (OFFSET 5 LIMIT 5):
+
+	>>> Entry.objects.all()[5:10]
+
+L'indicizzazione negativa (cioè Entry.objects.all()[-1]) non è supportata.
+
+In genere, lo slicing di un QuerySet restituisce un nuovo QuerySet ma non valuta la query; vi è un'eccezione se si utilizza il parametro "step" della sintassi della slice Python; ad esempio, questo eseguirebbe effettivamente la query per restituire un elenco di ogni secondo oggetto dei primi 10:
+
+	>>> Entry.objects.all()[:10:2]
+
+L'ulteriore filtraggio o ordinamento di un set di query suddiviso è vietato a causa della natura ambigua di come potrebbe funzionare.
+
+Per recuperare un singolo oggetto anziché un elenco (ad esempio "SELECT foo FROM bar LIMIT 1"), è meglio utilizzare un indice invece di una sezione; l'esempio che segue restituisce il primo Entry nel database, dopo aver ordinato le voci in ordine alfabetico per titolo:
+
+	>>> Entry.objects.order_by('headline')[0]
+
+... che è più o meno equivalente a ...
+
+	>>> Entry.objects.order_by('headline')[0:1].get()
+
+Notiamo, tuttavia, che il primo di questi solleverà un IndexError mentre il secondo solleverà un DoesNotExist se nessun oggetto corrisponde ai criteri indicati. Vedasi get() per maggiori dettagli.
+
+
+Ricerche su un campo
+--------------------
+
+Le ricerche su un campo sono il modo in cui specifichiamo il contenuto di una clausola WHERE di SQL. Sono specificati come argomenti di parole chiave per i metodi QuerySet filter() exclude() e get().
+
+Gli argomenti delle parole chiave di ricerca di base assumono la forma field__lookuptype=value (con un doppio underscore); per esempio:
+
+	>>> Entry.objects.filter(pub_date__lte='2006-01-01')
+
+... traduce (approssimativamente) nel seguente SQL...
+
+	SELECT * FROM blog_entry WHERE pub_date <= '2006-01-01';
+	
+
+Python ha infatti la capacità di definire funzioni che accettano argomenti nome-valore arbitrari i cui nomi e valori vengono valutati in fase di esecuzione. Per ulteriori informazioni, consulta Argomenti delle parole chiave nel tutorial ufficiale di Python:
+
+	https://docs.python.org/3/tutorial/controlflow.html#tut-keywordargs
+
+
+Il campo specificato in una ricerca deve essere il nome di un campo modello. C'è però un'eccezione, in caso di a ForeignKey possiamo specificare il nome del campo con suffisso _id; in questo caso, il parametro value dovrebbe contenere il valore raw della chiave primaria del modello esterno. Per esempio:
+
+	>>> Entry.objects.filter(blog_id=4)
+
+Se si passa un argomento di parola chiave non valido, la funzione di ricerca sollever TypeError.
+
+L'API del database supporta circa due dozzine di tipi di ricerca; un riferimento completo può essere trovato nel campo di riferimento di ricerca, su:
+
+	https://docs.djangoproject.com/en/4.0/ref/models/querysets/#field-lookups
+
+
+Per avere un assaggio di ciò che è disponibile, ecco alcune delle ricerche più comuni che probabilmente utilizzeremo:
+
+
+[exact]
+
+Restituisce una corrispondenza "esatta". Per esempio:
+
+	>>> Entry.objects.get(headline__exact="Cat bites dog")
+
+Genererebbe SQL del tipo ...
+
+	SELECT ... WHERE headline = 'Cat bites dog';
+
+Se non fornisci un tipo di ricerca, ovvero se l'argomento della nostra parola chiave non contiene un doppio trattino basso, si presume che il tipo di ricerca sia exact.
+
+Ad esempio, le due affermazioni seguenti sono equivalenti:
+
+	>>> Blog.objects.get(id__exact=14)  # Explicit form
+	>>> Blog.objects.get(id=14)         # __exact is implied
+
+Questo è per comodità, perché le ricerche exact sono il caso più comune.
+
+
+[iexact]
+
+Restituisce una corrispondenza senza distinzione tra maiuscole e minuscole. Quindi, la query:
+
+	>>> Blog.objects.get(name__iexact="beatles blog")
+
+Corrisponderebbe a un Blog dal titolo "Beatles Blog", "beatles blog" o anche "BeAtlES blOG"
+
+[contains]
+
+Test del contenuto con distinzione tra maiuscole e minuscole. Per esempio:
+
+	Entry.objects.get(headline__contains='Lennon')
+
+Si traduce approssimativamente in questa SQL:
+
+	SELECT ... WHERE headline LIKE '%Lennon%';
+
+Nota che corrisponderà al titolo 'Today Lennon honored' ma non a 'today lennon honored'.
+
+C'è anche una versione senza distinzione tra maiuscole e minuscole: icontains.
+
+
+[startswith, endswith]
+
+Inizia con e finisce con la ricerca, rispettivamente. Esistono anche versioni senza distinzione tra maiuscole e minuscole chiamate istartswithe iendswith.
+
+
+Ricerche che abbracciano le relazioni
+-------------------------------------
+
+Django offre un modo potente e intuitivo per "seguire" le relazioni nelle ricerche, occupandosi degli SQL JOIN per noi automaticamente, dietro le quinte. Per estendere una relazione, utilizza il nome del campo dei campi correlati tra i modelli, separati da doppi caratteri di sottolineatura, fino ad arrivare al campo desiderato.
+
+Questo esempio recupera tutti gli oggetti Entry con un Blog il cui nome è 'Beatles Blog'
+
+	>>> Entry.objects.filter(blog__name='Beatles Blog')
+
+Questa ricerca può essere profonda quanto si desidera; funziona anche all'indietro e può essere personalizzato, ma per impostazione predefinita si fa riferimento a una relazione "inversa" in una ricerca utilizzando il nome minuscolo del modello.
+
+Questo esempio recupera tutti gli oggetti Blog che ne hanno almeno uno Entry il cui headline contiene 'Lennon':
+
+	>>> Blog.objects.filter(entry__headline__contains='Lennon')
+
+Se stiamo filtrando su più relazioni e uno dei modelli intermedi non ha un valore che soddisfi la condizione di filtro, Django lo tratterà come se fosse presente un oggetto vuoto (tutti i valori sono NULL), ma valido. Tutto ciò significa che non verrà generato alcun errore. Ad esempio, in questo filtro:
+
+	Blog.objects.filter(entry__authors__name='Lennon')
+
+(se esistesse un modello Author correlato), se non ci fosse author associato a una voce, verrebbe trattato come se non ci fosse anche un name allegato, piuttosto che sollevare un errore a causa di un author non trovato. Di solito questo è esattamente ciò che vogliamo che accada. L'unico caso che potrebbe creare confusione è se stiamo usando isnull. Così...
+
+	Blog.objects.filter(entry__authors__name__isnull=True)
+
+... restituirà oggetti Blog che hanno un name vuoto su author e anche quelli che hanno un author vuoto su entry. Se non vogliamo questi ultimi oggetti, possiamo scrivere:
+
+	Blog.objects.filter(entry__authors__isnull=False, entry__authors__name__isnull=True)
+
+
+Spanning relazioni multivalore
+------------------------------
+
+Quando si estende a ManyToManyField o un inverso ForeignKey (come da Blog a Entry), il filtraggio su più attributi solleva la questione se richiedere che ciascun attributo coincida nello stesso oggetto correlato. 
+
+Potremmo cercare blog che hanno una voce del 2008 con "Lennon" nel titolo, oppure potremmo cercare blog che contengono semplicemente una voce del 2008, nonché qualche voce più recente o precedente con "Lennon" nel titolo.
+
+Per selezionare tutti i blog contenenti almeno una voce del 2008 avente come titolo "Lennon" (la stessa voce che soddisfa entrambe le condizioni), scriviamo:
+
+	Blog.objects.filter(entry__headline__contains='Lennon', entry__pub_date__year=2008)
+
+Altrimenti, per eseguire una query più permissiva selezionando qualsiasi blog con solo una voce con "Lennon" nel titolo e una voce del 2008, scriveremmo:
+
+	Blog.objects.filter(entry__headline__contains='Lennon').filter(entry__pub_date__year=2008)
+
+Supponiamo che ci sia un solo blog che abbia entrambe le voci contenenti "Lennon" e voci del 2008, ma che nessuna delle voci del 2008 contenga "Lennon". 
+
+La prima query non restituirebbe alcun blog, ma la seconda query restituirebbe quel blog. (Questo perché le voci selezionate dal secondo filtro possono o non possono essere le stesse voci nel primo filtro. Stiamo filtrando gli elementi Blog con ciascuna istruzione di filtro, non gli elementi Entry) In breve, se ogni condizione deve corrispondere lo stesso oggetto correlato, quindi ciascuno dovrebbe essere contenuto in una singola chiamata filter().
+
+Nota:  Poiché la seconda query (più permissiva) concatena più filtri, esegue più join al modello primario, generando potenzialmente duplicati.
+
+	>>> from datetime import date
+	>>> beatles = Blog.objects.create(name='Beatles Blog')
+	>>> pop = Blog.objects.create(name='Pop Music Blog')
+
+	>>> Entry.objects.create(
+	...     blog=beatles,
+	...     headline='New Lennon Biography',
+	...     pub_date=date(2008, 6, 1),
+	... )
+		<Entry: New Lennon Biography>
+
+	>>> Entry.objects.create(
+	...     blog=beatles,
+	...     headline='New Lennon Biography in Paperback',
+	...     pub_date=date(2009, 6, 1),
+	... )
+		<Entry: New Lennon Biography in Paperback>
+
+	>>> Entry.objects.create(
+	...     blog=pop,
+	...     headline='Best Albums of 2008',
+	...     pub_date=date(2008, 12, 15),
+	... )
+		<Entry: Best Albums of 2008>
+
+	>>> Entry.objects.create(
+	...     blog=pop,
+	...     headline='Lennon Would Have Loved Hip Hop',
+	...     pub_date=date(2020, 4, 1),
+	... )
+		<Entry: Lennon Would Have Loved Hip Hop>
+
+	>>> Blog.objects.filter(
+	...     entry__headline__contains='Lennon',
+	...     entry__pub_date__year=2008,
+	... )
+		<QuerySet [<Blog: Beatles Blog>]>
+
+	>>> Blog.objects.filter(
+	...     entry__headline__contains='Lennon',
+	... ).filter(
+	...     entry__pub_date__year=2008,
+	... )
+		<QuerySet [<Blog: Beatles Blog>, <Blog: Beatles Blog>, 
+		<Blog: Pop Music Blog]>
+
+Nota:  Il comportamento di filter() per le query che si estendono su relazioni multivalore, come descritto sopra, non è implementato in modo equivalente per exclude(). Le condizioni in un unico bando exclude(), invece, non faranno necessariamente riferimento alla stessa voce.
+
+Ad esempio, la seguente query escluderebbe i blog che contengono sia le voci con "Lennon" nel titolo che le voci pubblicate nel 2008:
+
+	Blog.objects.exclude(
+		entry__headline__contains='Lennon',
+		entry__pub_date__year=2008,
+	)
+
+Tuttavia, a differenza del comportamento quando si utilizza filter(), ciò non limiterà i blog in base alle voci che soddisfano entrambe le condizioni. Per fare ciò, cioè per selezionare tutti i blog che non contengono voci pubblicate con "Lennon" che sono state pubblicate nel 2008, è necessario fare due querys:
+
+	Blog.objects.exclude(
+		entry__in=Entry.objects.filter(
+			headline__contains='Lennon',
+			pub_date__year=2008,
+		),
+	)
+
+
+I filtri possono fare riferimento ai campi del modello
+------------------------------------------------------
+
+Negli esempi forniti finora, abbiamo costruito filtri che confrontano il valore di un campo del modello con una costante. Ma cosa succede se si desidera confrontare il valore di un campo modello con un altro campo sullo stesso modello?
+
+Django fornisce le espressioni F() che consentono tali confronti. Istanze di F() fungono da riferimento a un campo modello all'interno di una query. Questi riferimenti possono quindi essere utilizzati nei filtri di query per confrontare i valori di due campi diversi sulla stessa istanza del modello. Per maggiori dettagli sulle expressioni F() si veda...
+
+	https://docs.djangoproject.com/en/4.0/ref/models/expressions/#django.db.models.F
+
+Ad esempio, per trovare un elenco di tutti i post di blog che hanno avuto più commenti di ritorno (pingback), costruiamo un oggetto F() per fare riferimento al conteggio dei pingback e utilizziamo F()quell'oggetto nella query:
+
+	>>> from django.db.models import F
+	>>> Entry.objects.filter(number_of_comments__gt=F('number_of_pingbacks'))
+
+Django supporta l'uso di addizione, sottrazione, moltiplicazione, divisione, modulo e potenza aritmetica con ogetti F(), sia con costanti che con altri oggetti F(). Per trovare tutte le voci di blog con più del doppio dei commenti rispetto ai pingback, modifichiamo la query:
+
+	>>> Entry.objects.filter(number_of_comments__gt=F('number_of_pingbacks') * 2)
+
+Per trovare tutte le voci in cui la valutazione della voce è inferiore alla somma del conteggio dei pingback e dei commenti, emetteremo la query:
+
+	>>> Entry.objects.filter(rating__lt=F('number_of_comments') + F('number_of_pingbacks'))
+
+È inoltre possibile utilizzare la notazione del doppio trattino basso per estendere le relazioni in un oggetto F(). Un oggetto F() con un doppio trattino basso introdurrà tutti i join necessari per accedere all'oggetto correlato. Ad esempio, per recuperare tutte le voci in cui il nome dell'autore è uguale al nome del blog, potremmo emettere la query:
+
+	>>> Entry.objects.filter(authors__name=F('blog__name'))
+
+Per i campi data e data/ora, possiamo aggiungere o sottrarre un oggetto timedelta. Quanto segue restituirebbe tutte le voci che sono state modificate più di 3 giorni dopo la pubblicazione:
+
+	>>> from datetime import timedelta
+	>>> Entry.objects.filter(mod_date__gt=F('pub_date') + timedelta(days=3))
+
+Gli F()oggetti supportano operazioni bit per bit di .bitand(), .bitor(), .bitxor(), .bitrightshift()e .bitleftshift(). Per esempio:
+
+	>>> F('somefield').bitand(16)
+
+
+Note su Oracle: Oracle non supporta l'operazione XOR bit per bit.
+
+
+
+Le espressioni possono fare riferimento alle trasformazioni (Novità in Django 3.2)
+----------------------------------------------------------------------------------
+
+Django supporta l'utilizzo delle trasformazioni nelle espressioni.
+
+Ad esempio, per trovare tutti gli oggetti Entry pubblicati nello stesso anno in cui sono stati modificati l'ultima volta:
+
+	>>> Entry.objects.filter(pub_date__year=F('mod_date__year'))
+
+Per trovare il primo anno in cui è stata pubblicata una voce, possiamo emettere la query:
+
+	>>> Entry.objects.aggregate(first_published_year=Min('pub_date__year'))
+
+Questo esempio trova il valore della voce con il punteggio più alto e il numero totale di commenti su tutte le voci per ogni anno:
+
+	>>> Entry.objects.values('pub_date__year').annotate(
+	...     top_rating=Subquery(
+	...         Entry.objects.filter(
+	...             pub_date__year=OuterRef('pub_date__year'),
+	...         ).order_by('-rating').values('rating')[:1]
+	...     ),
+	...     total_comments=Sum('number_of_comments'),
+	... )
+
+
+La scorciatoia di ricerca pk
+----------------------------
+
+Per comodità, Django fornisce una scorciatoia pk di ricerca, che sta per "chiave primaria".
+
+Nel modello Blog di esempio, la chiave primaria è il campo id, quindi queste tre istruzioni sono equivalenti:
+
+	>>> Blog.objects.get(id__exact=14) # Explicit form
+	>>> Blog.objects.get(id=14) # __exact is implied
+	>>> Blog.objects.get(pk=14) # pk implies id__exact
+
+L'uso di pk non è limitato alle query __exact, qualsiasi termine di query può essere combinato con pk per eseguire una query sulla chiave primaria di un modello:
+
+	# Get blogs entries with id 1, 4 and 7
+	>>> Blog.objects.filter(pk__in=[1,4,7])
+
+	# Get all blog entries with id > 14
+	>>> Blog.objects.filter(pk__gt=14)
+
+
+Le ricerche pk funzionano anche tra i join. Ad esempio, queste tre affermazioni sono equivalenti:
+
+	>>> Entry.objects.filter(blog__id__exact=3) # Explicit form
+	>>> Entry.objects.filter(blog__id=3)        # __exact is implied
+	>>> Entry.objects.filter(blog__pk=3)        # __pk implies __id__exact
+
+
+Sfuggire ai segni di percentuale e ai trattini bassi nelle dichiarazioni LIKE
+------------------------------------------------------------------------------
+
+Le ricerche di campo che equivalgono alle istruzioni SQL LIKE (cioè iexact, contains, icontains, startswith, istartswith, endswith e iendswith) "sfuggiranno" automaticamente ai due caratteri speciali utilizzati nelle istruzioni LIKE, ovvero il segno di percentuale e il carattere di sottolineatura. (In una dichiarazione LIKE, il segno di percentuale indica un carattere jolly di più caratteri e il trattino basso indica un carattere jolly di un solo carattere)
+
+Ciò significa che le cose dovrebbero funzionare in modo intuitivo, quindi l'astrazione non si perde. Ad esempio, per recuperare tutte le voci che contengono un segno di percentuale, utilizzare il segno di percentuale come qualsiasi altro carattere:
+
+	>>> Entry.objects.filter(headline__contains='%')
+
+Django si occupa di quotare per noi; l'SQL risultante sarà simile a questa:
+
+	SELECT ... WHERE headline LIKE '%\%%';
+	
+Lo stesso vale per i trattini bassi. Sia i segni di percentuale che i trattini bassi vengono gestiti per noi in modo trasparente.
+
+
+Memorizzazione nella cache e QuerySets
+--------------------------------------
+
+Ciascuno QuerySet contiene una cache per ridurre al minimo l'accesso al database. Capire come funziona ci permetterà di scrivere il codice più efficiente.
+
+In un file QuerySet appena creato, la cache è vuota. La prima volta che una QuerySet viene valutata – e, quindi, si esegue una query sul database – Django salva i risultati della query nella cache della QuerySet e restituisce i risultati che sono stati esplicitamente richiesti (ad esempio, l'elemento successivo, se QuerySet viene ripetuto). Successive valutazioni del QuerySet riutilizzano i risultati memorizzati nella cache.
+
+Teniamo presente questo comportamento di memorizzazione nella cache, perché potrebbero dare fastidio se non si usano correttamente i  QuerySet. L'esempio che segue creerà due QuerySets, le valuterà e le getterà via:
+
+	>>> print([e.headline for e in Entry.objects.all()])
+	>>> print([e.pub_date for e in Entry.objects.all()])
+
+Ciò significa che la stessa query del database verrà eseguita due volte, raddoppiando di fatto il carico del database. Inoltre, esiste la possibilità che i due elenchi non includano gli stessi record di database, perché un elemento Entry potrebbe essere stato aggiunto o eliminato nella frazione di secondo tra le due richieste.
+
+Per evitare questo problema, salva la QuerySet e riutilizzala:
+
+	>>> queryset = Entry.objects.all()
+	>>> print([p.headline for p in queryset]) # Evaluate the query set.
+	>>> print([p.pub_date for p in queryset]) # Re-use the cache from the evaluation.
+
+
+Quando le QuerySet non sono memorizzate nella cache
+---------------------------------------------------
+
+I set di query non sempre memorizzano nella cache i risultati. 
+
+Quando si valuta solo una parte del set di query, la cache viene controllata, ma se non viene popolata, gli elementi restituiti dalla query successiva non vengono memorizzati nella cache. In particolare, ciò significa che la limitazione del set di query utilizzando una porzione di matrice o un indice non popolerà la cache.
+
+Ad esempio, ottenere ripetutamente un determinato indice in un oggetto del set di query eseguirà una query sul database ogni volta:
+
+	>>> queryset = Entry.objects.all()
+	>>> print(queryset[5]) # Queries the database
+	>>> print(queryset[5]) # Queries the database again
+
+Tuttavia, se l'intero set di query è già stato valutato, verrà invece controllata la cache:
+
+	>>> queryset = Entry.objects.all()
+	>>> [entry for entry in queryset] # Queries the database
+	>>> print(queryset[5]) # Uses cache
+	>>> print(queryset[5]) # Uses cache
+
+Di seguito sono riportati alcuni esempi di altre azioni che comporteranno la valutazione dell'intero set di query e quindi la compilazione della cache:
+
+	>>> [entry for entry in queryset]
+	>>> bool(queryset)
+	>>> entry in queryset
+	>>> list(queryset)
+
+
+Nota:  La semplice stampa del set di query non popolerà la cache. Questo perché la chiamata a __repr__() restituisce solo una parte dell'intero set di query.
+
+
+Interrogazione di JSONField
+---------------------------
+
+L'implementazione delle ricerche è diversa in JSONField, principalmente a causa dell'esistenza di trasformazioni chiave. Per dimostrare, utilizzeremo il seguente modello di esempio:
+
+	from django.db import models
+
+	class Dog(models.Model):
+		name = models.CharField(max_length=200)
+		data = models.JSONField(null=True)
+
+		def __str__(self):
+			return self.name
+
+
+Memorizzazione e query per None
+-------------------------------
+
+Come con altri campi, la memorizzazione di None come valore del campo corrisponde al valore SQL NULL. Sebbene non sia consigliato, è possibile archiviare lo scalare null di JSON anziché il NULL di SQL utilizzando Value('null').
+
+Qualunque sia il valore memorizzato, quando viene recuperato dal database, la rappresentazione Python dello scalare JSON null è la stessa di SQL NULL, ovvero None; pertanto, può essere difficile distinguerli.
+
+Questo vale solo come valore None di primo livello del campo; se None è all'interno di un list o dict (lista o dizionario), verrà sempre interpretato come JSON null.
+
+Durante la query, il valore None verrà sempre interpretato come JSON null. Per eseguire una query per SQL NULL, utilizzare isnull:
+
+	>>> Dog.objects.create(name='Max', data=None)  # SQL NULL.
+		<Dog: Max>
+	>>> Dog.objects.create(name='Archie', data=Value('null'))  # JSON null.
+		<Dog: Archie>
+	>>> Dog.objects.filter(data=None)
+		<QuerySet [<Dog: Archie>]>
+	>>> Dog.objects.filter(data=Value('null'))
+		<QuerySet [<Dog: Archie>]>
+	>>> Dog.objects.filter(data__isnull=True)
+		<QuerySet [<Dog: Max>]>
+	>>> Dog.objects.filter(data__isnull=False)
+		<QuerySet [<Dog: Archie>]>
+
+A meno che non siamo sicuri di voler lavorare con valori SQL NULL, consideriamo di impostare null=False e fornire un valore predefinito adatto per valori vuoti, come default=dict.
+
+Nota:  La memorizzazione dello scalare JSON null non viola null=False.
+
+
+Trasformazioni di chiave, indice e percorso
+-------------------------------------------
+
+Per eseguire query in base a una determinata chiave del dizionario, utilizziamo quella chiave come nome di ricerca:
+
+	>>> Dog.objects.create(name='Rufus', data={
+	...     'breed': 'labrador',
+	...     'owner': {
+	...         'name': 'Bob',
+	...         'other_pets': [{
+	...             'name': 'Fishy',
+	...         }],
+	...     },
+	... })
+		<Dog: Rufus>
+
+	>>> Dog.objects.create(name='Meg', data={'breed': 'collie', 'owner': None})
+		<Dog: Meg>
+		
+	>>> Dog.objects.filter(data__breed='collie')
+		<QuerySet [<Dog: Meg>]>
+
+
+Più chiavi possono essere concatenate insieme per formare una ricerca di percorso:
+
+	>>> Dog.objects.filter(data__owner__name='Bob')
+		<QuerySet [<Dog: Rufus>]>
+
+Se la chiave è un numero intero, verrà interpretata come una trasformazione di indice in un array:
+
+	>>> Dog.objects.filter(data__owner__other_pets__0__name='Fishy')
+		<QuerySet [<Dog: Rufus>]>
+
+Se la chiave che si desidera interrogare contrasta con il nome di un'altra ricerca, utilizzare invece la ricerca "contains".
+
+Per richiedere chiavi mancanti, utilizzare la ricerca "isnull".
+
+	>>> Dog.objects.create(name='Shep', data={'breed': 'collie'})
+		<Dog: Shep>
+	>>> Dog.objects.filter(data__owner__isnull=True)
+		<QuerySet [<Dog: Shep>]>
+
+Nota:  Gli esempi di ricerca forniti sopra utilizzano implicitamente la ricerca exact. Le trasformazioni di chiavi, indici e percorsi possono anche essere concatenate con icontains, endswith, iendswith, iexact, regex, iregex, startswith, istartswith, lt, lte, gt, e gte, nonché con il contenimento e ricerche di chiavi; per dettagli vedasi:
+
+	https://docs.djangoproject.com/en/4.0/topics/db/queries/#containment-and-key-lookups
+
+Nota:  A causa del modo in cui funzionano le query del percorso chiave exclude() e filter() non è garantito che producano set esaustivi. Se vogliamo includere oggetti che non hanno il percorso, aggiungi la ricerca isnull.
+
+Attenzione:  Poiché qualsiasi stringa potrebbe essere una chiave in un oggetto JSON, qualsiasi ricerca diversa da quelle elencate di seguito verrà interpretata come una ricerca chiave. Non vengono generati errori. Facciamo molta attenzione agli errori di battitura e controlliamo sempre che le nostre query funzionino come previsto.
+
+
+[ Utenti MariaDB e Oracle ]
+
+L'uso di trasformazioni order_by() su chiave, indice o percorso ordina gli oggetti utilizzando la rappresentazione di stringa dei valori. Questo perché i database MariaDB e Oracle non forniscono una funzione che converte i valori JSON nei loro valori SQL equivalenti.
+
+
+[ Utenti Oracle ]
+
+In Database Oracle, l'utilizzo di None come valore di ricerca in una query exclude() restituirà oggetti che non hanno null come valore nel percorso specificato, inclusi gli oggetti che non hanno il percorso. Su altri backend di database, la query restituirà oggetti che hanno il percorso e il valore non è null.
+
+
+[ Utenti PostgreSQL ] 
+
+Su PostgreSQL, se viene utilizzata una sola chiave o indice, viene utilizzato l'operatore SQL ->. Se vengono utilizzati più operatori, viene utilizzato l'operatore #>.
+
+
+Contenimento e ricerche chiave
+------------------------------
+
+[ contains ]
+
+La ricerca contains viene sovrascritta su JSONField. Gli oggetti restituiti sono quelli in cui i dati di coppie "dict" chiave-valore sono tutti contenuti nel livello superiore del campo. Per esempio:
+
+	>>> Dog.objects.create(name='Rufus', data={'breed': 'labrador', 'owner': 'Bob'})
+		<Dog: Rufus>
+	>>> Dog.objects.create(name='Meg', data={'breed': 'collie', 'owner': 'Bob'})
+		<Dog: Meg>
+	>>> Dog.objects.create(name='Fred', data={})
+		<Dog: Fred>
+	>>> Dog.objects.filter(data__contains={'owner': 'Bob'})
+		<QuerySet [<Dog: Rufus>, <Dog: Meg>]>
+	>>> Dog.objects.filter(data__contains={'breed': 'collie'})
+		<QuerySet [<Dog: Meg>]>
+
+
+Nota:  contains non è supportato su Oracle e SQLite.
+
+
+[ contained_by ]
+
+L'inverso della ricerca contains è contained_by: gli oggetti restituiti saranno quelli in cui le coppie chiave-valore sull'oggetto sono un sottoinsieme di quelli nel valore passato. Per esempio:
+
+	>>> Dog.objects.create(name='Rufus', data={'breed': 'labrador', 'owner': 'Bob'})
+		<Dog: Rufus>
+	>>> Dog.objects.create(name='Meg', data={'breed': 'collie', 'owner': 'Bob'})
+		<Dog: Meg>
+	>>> Dog.objects.create(name='Fred', data={})
+		<Dog: Fred>
+	>>> Dog.objects.filter(data__contained_by={'breed': 'collie', 'owner': 'Bob'})
+		<QuerySet [<Dog: Meg>, <Dog: Fred>]>
+	>>> Dog.objects.filter(data__contained_by={'breed': 'collie'})
+		<QuerySet [<Dog: Fred>]>
+
+
+Nota:  contained_bynon è supportato su Oracle e SQLite.
+
+
+[ has_key ]
+
+Restituisce oggetti in cui la chiave specificata si trova nel livello superiore dei dati. Per esempio:
+
+	>>> Dog.objects.create(name='Rufus', data={'breed': 'labrador'})
+		<Dog: Rufus>
+	>>> Dog.objects.create(name='Meg', data={'breed': 'collie', 'owner': 'Bob'})
+		<Dog: Meg>
+	>>> Dog.objects.filter(data__has_key='owner')
+		<QuerySet [<Dog: Meg>]>
+
+
+[ has_keys ]
+
+Restituisce oggetti in cui tutte le chiavi fornite si trovano nel livello superiore dei dati. Per esempio:
+
+	>>> Dog.objects.create(name='Rufus', data={'breed': 'labrador'})
+		<Dog: Rufus>
+	>>> Dog.objects.create(name='Meg', data={'breed': 'collie', 'owner': 'Bob'})
+		<Dog: Meg>
+	>>> Dog.objects.filter(data__has_keys=['breed', 'owner'])
+		<QuerySet [<Dog: Meg>]>
+
+
+
+
+[ has_any_keys ]
+
+Restituisce oggetti in cui una qualsiasi delle chiavi fornite si trova nel livello superiore dei dati. Per esempio:
+
+	>>> Dog.objects.create(name='Rufus', data={'breed': 'labrador'})
+		<Dog: Rufus>
+	>>> Dog.objects.create(name='Meg', data={'owner': 'Bob'})
+		<Dog: Meg>
+	>>> Dog.objects.filter(data__has_any_keys=['owner', 'breed'])
+		<QuerySet [<Dog: Rufus>, <Dog: Meg>]>
+
+
+Ricerche complesse con Q objects
+================================
+
+Le query sugli argomenti delle parole chiave – in filter(), ecc. – vengono combinate con "AND". 
+
+Se dobbiamo eseguire query più complesse (ad esempio query con istruzioni OR), possiamo utilizzare Q objects.
+
+Un Q object (django.db.models.Q)  è un oggetto utilizzato per incapsulare una raccolta di argomenti di parole chiave. Questi argomenti delle parole chiave sono specificati come in "Ricerche sul campo", come specificato più avanti.
+
+Ad esempio, questo oggetto Q incapsula una singola query LIKE:
+
+	from django.db.models import Q
+
+	Q(question__startswith='What')
+
+
+Gli oggetti Q possono essere combinati utilizzando gli operatori "&" e "|" (and e or). Quando un operatore viene utilizzato su due oggetti Q, restituisce un nuovo oggetto Q.
+
+Ad esempio, questa istruzione produce un singolo oggetto Q che rappresenta l'"OR" di due query "question__startswith":
+
+	Q(question__startswith='Who') | Q(question__startswith='What')
+
+Ciò equivale alla seguente WHEREclausola SQL:
+
+	WHERE question LIKE 'Who%' OR question LIKE 'What%'
+
+È possibile comporre affermazioni di complessità arbitraria combinando oggetti Q con gli operatori AND e utilizzando il raggruppamento tra parentesi &.  Inoltre, gli oggetti Q possono essere negati utilizzando l'operatore ~, consentendo ricerche combinate sia di una query normale che una query negata (NOT):
+
+	Q(question__startswith='Who') | ~Q(pub_date__year=2005)
+
+Ciascuna funzione di ricerca che accetta argomenti chiave (ad es. filter(), exclude(), get()) può anche essere passata a uno o più oggetti Q come argomenti posizionali (senza nome). Se forniamo più argomenti oggetto di tipo Q a una funzione di ricerca, gli argomenti verranno concatenati insieme con "AND". Per esempio l'espressione ...
+
+	Poll.objects.get(
+		Q(question__startswith='Who'),
+		Q(pub_date=date(2005, 5, 2)) | Q(pub_date=date(2005, 5, 6))
+	)
+
+... si traduce approssimativamente nella SQL ...
+
+	SELECT * from polls WHERE question LIKE 'Who%'
+		AND (pub_date = '2005-05-02' OR pub_date = '2005-05-06')
+
+Le funzioni di ricerca possono combinare l'uso di oggetti Q e argomenti di parole chiave. Tutti gli argomenti forniti a una funzione di ricerca (siano essi argomenti di parole chiave o oggetti Q) vengono uniti insieme in "AND". Tuttavia, se viene fornito un oggetto Q, questo deve precedere la definizione di qualsiasi argomento della parola chiave. Per esempio:
+
+	Poll.objects.get(
+		Q(pub_date=date(2005, 5, 2)) | Q(pub_date=date(2005, 5, 6)),
+		question__startswith='Who',
+	)
+
+... sarebbe una query valida, equivalente all'esempio precedente, ma ...
+
+	# INVALID QUERY
+	Poll.objects.get(
+		question__startswith='Who',
+		Q(pub_date=date(2005, 5, 2)) | Q(pub_date=date(2005, 5, 6))
+	)
+
+...non sarebbe valido.
+
+
+Guarda anche gli esempi di ricerche OR negli unit test di Django mostrano alcuni possibili usi di Q:
+
+	https://github.com/django/django/blob/main/tests/or_lookups/tests.py
+
+
+Confrontare oggetti
+===================
+
+Per confrontare due istanze del modello, utilizzare l'operatore di confronto Python standard, il doppio segno di uguale "==". Dietro le quinte, esso confronta i valori chiave primari di due modelli.
+
+Utilizzando l'esempio Entry precedente, le seguenti due affermazioni sono equivalenti:
+
+	>>> some_entry == other_entry
+	>>> some_entry.id == other_entry.id
+
+Se la chiave primaria di un modello non viene chiamata id, nessun problema. I confronti utilizzeranno sempre la chiave primaria, comunque essa sia chiamata. Ad esempio, se viene chiamato il campo della chiave primaria di un modello "name", queste due istruzioni sono equivalenti:
+
+	>>> some_obj == other_obj
+	>>> some_obj.name == other_obj.name
+
+
+Eliminare oggetti
+=================
+
+Il metodo di eliminazione, convenientemente, è denominato delete().
+
+Questo metodo elimina immediatamente l'oggetto e restituisce il numero di oggetti eliminati e un dizionario con il numero di eliminazioni per tipo di oggetto. Esempio:
+
+	>>> e.delete()
+		(1, {'blog.Entry': 1})
+
+Puoi anche eliminare gli oggetti in blocco. Ogni QuerySet ha un metodo delete(), che elimina tutti i membri di quella QuerySet.
+
+Ad esempio, questo elimina tutti gli oggetti Entry con un anno di pub_date "2005":
+
+	>>> Entry.objects.filter(pub_date__year=2005).delete()
+		(5, {'webapp.Entry': 5})
+
+Teniamo presente che, quando possibile, verrà eseguito esclusivamente in SQL, quindi i metodi delete() delle singole istanze di oggetti non verranno necessariamente chiamati durante il processo. 
+
+Se abbiamo fornito un metodo delete() personalizzato su una classe del modello e vogliamo assicurarti che venga chiamato, dovremo eliminare "manualmente" le istanze di quel modello (ad esempio, iterando su una QuerySet e chiamando ogni oggetto delete() individualmente) invece di usare massicciamente il metodo delete() di un QuerySet.
+
+Quando Django elimina un oggetto, per impostazione predefinita emula il comportamento del vincolo SQL "ON DELETE CASCADE", in altre parole, tutti gli oggetti con chiavi esterne che puntano all'oggetto da eliminare verranno eliminati insieme ad esso. Per esempio:
+
+	b = Blog.objects.get(pk=1)
+	# This will delete the Blog and all of its Entry objects.
+	b.delete()
+
+Questo comportamento a cascata è personalizzabile tramite l'argomento on_delete del file ForeignKey.
+
+Si noti che delete() è l'unico metodo QuerySet che non è esposto dal Manager su se stesso. 
+
+Questo è un meccanismo di sicurezza per impedire di richiamare accidentalmente Entry.objects.delete() ed eliminare tutte le voci. 
+
+Se vogliamo eliminare tutti gli oggetti, dobbiamo richiamare esplicitamente un set di query completo:
+
+	Entry.objects.all().delete()
+
+
+Copia delle istanze del modello
+===============================
+
+Sebbene non esista un metodo integrato per copiare le istanze del modello, è possibile creare facilmente una nuova istanza con tutti i valori dei campi copiati. Nel caso più semplice, possiamo impostare pk su None e _state.adding su True. Usando il nostro esempio del blog:
+
+	blog = Blog(name='My blog', tagline='Blogging is easy')
+	blog.save() # blog.pk == 1
+
+	blog.pk = None
+	blog._state.adding = True
+	blog.save() # blog.pk == 2
+
+Le cose si complicano se si usa l'ereditarietà; consideriamo una sottoclasse di Blog:
+
+	class ThemeBlog(Blog):
+		theme = models.CharField(max_length=200)
+
+	django_blog = ThemeBlog(name='Django', tagline='Django is easy', 
+							theme='python')
+	django_blog.save() # django_blog.pk == 3
+
+A causa del funzionamento dell'ereditarietà, è necessario impostare sia pk e id su None, sia _state.adding su True:
+
+	django_blog.pk = None
+	django_blog.id = None
+	django_blog._state.adding = True
+	django_blog.save() # django_blog.pk == 4
+
+Questo processo non copia le relazioni che non fanno parte della tabella del database del modello. Ad esempio, Entry ha ManyToManyField a Author. Dopo aver duplicato una voce, è necessario impostare le relazioni molti-a-molti per la nuova voce:
+
+	entry = Entry.objects.all()[0] # some previous entry
+	old_authors = entry.authors.all()
+	entry.pk = None
+	entry._state.adding = True
+	entry.save()
+	entry.authors.set(old_authors)
+
+Per un OneToOneField (relazione uno-a-uno), è necessario duplicare l'oggetto correlato e assegnarlo al campo del nuovo oggetto per evitare di violare il vincolo univoco uno a uno. Ad esempio, supponendo che entrysia già duplicato come sopra:
+
+	detail = EntryDetail.objects.all()[0]
+	detail.pk = None
+	detail._state.adding = True
+	detail.entry = entry
+	detail.save()
+
+
+Aggiornare più oggetti contemporaneamente
+=========================================
+
+A volte si desidera impostare un campo su un valore particolare per tutti gli oggetti in un file QuerySet. possiamo farlo con il metodo update(). Per esempio:
+
+	# Update all the headlines with pub_date in 2007.
+	Entry.objects.filter(pub_date__year=2007).update(headline='Everything is the same')
+
+È possibile impostare solo campi non di relazione e campi ForeignKey utilizzando questo metodo; per aggiornare un campo non di relazione, forniamo il nuovo valore come costante. Per aggiornare i campi ForeignKey, imposta il nuovo valore in modo che sia la nuova istanza del modello a cui vogliamo puntare. Per esempio:
+
+	>>> b = Blog.objects.get(pk=1)
+
+	# Change every Entry so that it belongs to this Blog.
+	>>> Entry.objects.all().update(blog=b)
+
+Il metodo update() viene applicato istantaneamente e restituisce il numero di righe corrispondenti alla query (che potrebbe non essere uguale al numero di righe aggiornate se alcune righe hanno già il nuovo valore). 
+
+L'unica restrizione QuerySet all'aggiornamento è che può accedere a una sola tabella del database: la tabella principale del modello. possiamo filtrare in base a campi correlati, ma possiamo aggiornare solo le colonne nella tabella principale del modello. Esempio:
+
+	>>> b = Blog.objects.get(pk=1)
+
+	# Update all the headlines belonging to this Blog.
+	>>> Entry.objects.filter(blog=b).update(headline='Everything is the same')
+
+Teniamo presente che il metodo update() viene convertito direttamente in un'istruzione SQL. È un'operazione in blocco per gli aggiornamenti diretti. Non esegue alcun metodo save() sui nostri modelli, né emette i segnali pre_save o post_save (che sono una conseguenza della chiamata save()) né rispetta l'opzione auto_now del campo. Se vogliamo salvare ogni elemento in una QuerySet e assicurarci che il metodo save() venga chiamato su ogni istanza, non abbiamo bisogno di alcuna funzione speciale per gestirlo; creiamo un loop con chiamate save():
+
+	for item in my_queryset:
+		item.save()
+	
+Le chiamate update possono essere utilizzate anche espressioni F per aggiornare un campo in base al valore di un altro campo nel modello. Ciò è particolarmente utile per incrementare i contatori in base al loro valore corrente. Ad esempio, per aumentare il conteggio dei pingback per ogni voce nel blog:
+
+	>>> Entry.objects.all().update(number_of_pingbacks=F('number_of_pingbacks') + 1)
+
+Tuttavia, a differenza degli oggetti F() nelle clausole di filtro e di esclusione, non è possibile introdurre join quando si utilizzano oggetti F() in un aggiornamento; è possibile fare riferimento solo ai campi locali del modello in fase di aggiornamento. Se si tenta di introdurre un join con un oggetto F(), verrà sollevato un FieldError:
+
+	# This will raise a FieldError
+	>>> Entry.objects.update(headline=F('blog__name'))
+
+
+
+
+Oggetti correlati
+=================
+
+Quando si definisce una relazione in un modello (ad es. ForeignKey, OneToOneField o ManyToManyField), le istanze di quel modello disporranno di una comoda API per accedere agli oggetti correlati.
+
+Utilizzando i modelli in cima a questa pagina, ad esempio, un oggetto Entry epuò ottenere il suo oggetto Blog associato accedendo all'attributo blog, cioè e.blog (Dietro le quinte, questa funzionalità è implementata dai descrittori Python. Questo non dovrebbe interessarti, ma lo segnaliamo qui per i curiosi)
+
+Django crea anche accessor API per l'"altro" lato della relazione: il collegamento dal modello correlato al modello che definisce la relazione. Ad esempio, un oggetto Blog "b" ha accesso a un elenco di tutti gli oggetti Entry correlati tramite l'attributo  entry_set che è b.entry_set.all()
+
+Tutti gli esempi in questa sezione utilizzano i modelli di esempio Blog, Author ed Entry precedentemente definiti.
+
+
+Relazioni uno-a-molti
+---------------------
+
+[ Avanti ]
+Se un modello ha un ForeignKey, le istanze di quel modello avranno accesso all'oggetto correlato (estraneo) tramite un attributo del modello.  Esempio:
+
+	>>> e = Entry.objects.get(id=2)
+	>>> e.blog # Returns the related Blog object.
+
+È possibile ottenere e impostare tramite un attributo di chiave esterna. Come ci si può aspettare, le modifiche alla chiave esterna non vengono salvate nel database finché non si chiama save(). Esempio:
+
+	>>> e = Entry.objects.get(id=2)
+	>>> e.blog = some_blog
+	>>> e.save()
+
+Se un campo ForeignKey è impostato con null=True (cioè consente valori NULL), è possibile assegnare Nonela rimozione della relazione. Esempio:
+
+	>>> e = Entry.objects.get(id=2)
+	>>> e.blog = None
+	>>> e.save() # "UPDATE blog_entry SET blog_id = NULL ...;"
+
+L'accesso in avanti alle relazioni uno-a-molti viene memorizzato nella cache la prima volta che si accede all'oggetto correlato. Gli accessi successivi alla chiave esterna sulla stessa istanza dell'oggetto vengono memorizzati nella cache. Esempio:
+
+	>>> e = Entry.objects.get(id=2)
+	>>> print(e.blog)  # Hits the database to retrieve the associated Blog.
+	>>> print(e.blog)  # Doesn't hit the database; uses cached version.
+
+Si noti che il metodo select_related() di QuerySet prepopola in modo ricorsivo la cache di tutte le relazioni uno-a-molti in anticipo. Esempio:
+
+	>>> e = Entry.objects.select_related().get(id=2)
+	>>> print(e.blog)  # Doesn't hit the database; uses cached version.
+	>>> print(e.blog)  # Doesn't hit the database; uses cached version.
+
+
+[ Seguire le relazioni "all'indietro" ]
+
+Se un modello ha un ForeignKey, le istanze del modello a chiave esterna avranno accesso a un Manager che restituisce tutte le istanze del primo modello. Per impostazione predefinita, il Manager è denominato FOO_set, dove FOO è il nome del modello di origine, in minuscolo. Questo Manager restituisce dei QuerySets, che possono essere filtrati e manipolati come descritto nella sezione "Recupero di oggetti" sopra. Esempio:
+
+	>>> b = Blog.objects.get(id=1)
+	>>> b.entry_set.all() # Returns all Entry objects related to Blog.
+
+	# b.entry_set is a Manager that returns QuerySets.
+	>>> b.entry_set.filter(headline__contains='Lennon')
+	>>> b.entry_set.count()
+
+È possibile sovrascrivere il nome FOO_set impostando il parametro related_name nella definizione di ForeignKey; ad esempio, se il modello Entry è stato modificato in blog = ForeignKey(Blog, on_delete=models.CASCADE, related_name='entries'), il codice di esempio visto sopra sarebbe simile al seguente:
+
+	>>> b = Blog.objects.get(id=1)
+	>>> b.entries.all() # Returns all Entry objects related to Blog.
+
+	# b.entries is a Manager that returns QuerySets.
+	>>> b.entries.filter(headline__contains='Lennon')
+	>>> b.entries.count()
+
+Utilizzo di un gestore inverso personalizzato
+
+Per impostazione predefinita, il RelatedManager usato per le relazioni inverse è una sottoclasse del gestore predefinito per quel modello. Se desideriamo specificare un gestore diverso per una determinata query, possiamo utilizzare la seguente sintassi:
+
+	from django.db import models
+
+	class Entry(models.Model):
+		#...
+		objects = models.Manager()  # Default Manager
+		entries = EntryManager()    # Custom Manager
+
+	b = Blog.objects.get(id=1)
+	b.entry_set(manager='entries').all()
+
+Se l'EntryManager eseguisse il filtro predefinito nel relativo metodo get_queryset(), tale filtro si applicherebbe alla chiamata all().
+
+La specifica di un gestore inverso personalizzato consente inoltre di richiamarne i metodi personalizzati:
+
+	b.entry_set(manager='entries').is_published()
+
+
+
+
+[Metodi aggiuntivi per gestire oggetti correlati]
+
+Oltre ai metodi QuerySet definiti nel paragrafo "Recupero di oggetti" precedente, il ForeignKey Manager dispone di metodi aggiuntivi utilizzati per gestire l'insieme di oggetti correlati. Di seguito è riportata una sinossi di ciascuno e i dettagli completi possono essere trovati nel riferimento agli oggetti correlati in:
+
+	https://docs.djangoproject.com/en/4.0/ref/models/relations/
+
+Questi sono:
+
+	add(obj1, obj2, ...)
+		Aggiunge gli oggetti del modello specificati al set di oggetti
+		correlato.
+
+	create(**kwargs)
+		Crea un nuovo oggetto, lo salva e lo inserisce nel relativo insieme 
+		di oggetti. Restituisce l'oggetto appena creato.
+
+	remove(obj1, obj2, ...)
+		Rimuove gli oggetti del modello specificati dal set di oggetti 
+		correlato.
+
+	clear()
+		Rimuove tutti gli oggetti dal set di oggetti correlato.
+
+	set(objs)
+		Sostituisci l'insieme di oggetti correlati.
+
+Per assegnare i membri di un insieme correlato, utilizzare il metodo set() con un iterazione di istanze di oggetti. Ad esempio, se e1 ed e2 sono istanze Entry abbiamo ...
+
+	b = Blog.objects.get(id=1)
+	b.entry_set.set([e1, e2])
+
+Se il metodo clear() è disponibile, tutti gli oggetti preesistenti verranno rimossi dall'entry_set prima che tutti gli oggetti nell'iterabile (in questo caso, un elenco) vengano aggiunti al set. Se il metodo clear() non è disponibile, tutti gli oggetti nell'iterabile verranno aggiunti senza rimuovere alcun elemento esistente.
+
+Ogni operazione "inversa" descritta in questa sezione ha un effetto immediato sul database; ogni aggiunta, creazione e cancellazione viene salvata immediatamente e automaticamente nel database.
+
+
+Relazioni molti-a-molti
+-----------------------
+
+Entrambe le estremità di una relazione molti-a-molti ottengono l'accesso API automatico all'altra estremità. L'API funziona in modo simile a una relazione uno-a-molti all'"indietro".
+
+Una differenza è nella denominazione degli attributi: il modello che definisce ManyToManyField utilizza il nome dell'attributo di quel campo stesso, mentre il modello "inverso" utilizza il nome del modello in minuscolo del modello originale, più '_set'(proprio come le relazioni uno-a-molti inverse).
+
+Un esempio semplifica la comprensione:
+
+	e = Entry.objects.get(id=3)
+	e.authors.all() # Returns all Author objects for this Entry.
+
+	e.authors.count()
+	e.authors.filter(name__contains='John')
+
+	a = Author.objects.get(id=5)
+	a.entry_set.all() # Returns all Entry objects for this Author.
+
+Come ForeignKey, ManyToManyField può specificare related_name. Nell'esempio precedente, se ManyToManyField in Entry avesse specificato related_name='entries', ogni istanza Author avrebbe un attribugo entries invece di entry_set.
+
+Un'altra differenza rispetto alle relazioni uno-a-molti è che, oltre alle istanze del modello, i metodi add(), set()e remove() sulle relazioni molti-a-molti accettano valori chiave primari. Ad esempio, se e1 ed e2 sono istanze Entry, queste chiamate set() funzionano in modo identico:
+
+	a = Author.objects.get(id=5)
+	a.entry_set.set([e1, e2])
+	a.entry_set.set([e1.pk, e2.pk])
+
+
+Relazioni uno a uno
+-------------------
+
+Le relazioni uno-a-uno sono molto simili alle relazioni molti-a-uno. Se definiamo un OneToOneField sul nostro modello, le istanze di quel modello avranno accesso all'oggetto correlato tramite un attributo del modello. Per esempio:
+
+	class EntryDetail(models.Model):
+		entry = models.OneToOneField(Entry, on_delete=models.CASCADE)
+		details = models.TextField()
+
+	ed = EntryDetail.objects.get(id=2)
+	ed.entry # Returns the related Entry object.
+
+La differenza sta nelle query "inverse"; anche il modello correlato in una relazione uno-a-uno ha accesso a un oggetto Manager, ma che rappresenta un singolo oggetto Manager, piuttosto che una raccolta di oggetti:
+
+	e = Entry.objects.get(id=2)
+	e.entrydetail # returns the related EntryDetail object
+
+Se nessun oggetto è stato assegnato a questa relazione, Django solleverà un'eccezione DoesNotExist.
+
+Le istanze possono essere assegnate alla relazione inversa nello stesso modo in cui assegneresti la relazione diretta:
+
+	e.entrydetail = ed
+
+
+
+
+
+Come sono possibili le relazioni arretrate
+------------------------------------------
+
+Altri mappatori relazionali di oggetti richiedono la definizione di relazioni su entrambi i lati. Gli sviluppatori di Django ritengono che questa sia una violazione del principio DRY (Don't Repeat Yourself), quindi Django richiede solo di definire la relazione da un lato.
+
+Ma come è possibile, dato che una classe modello non sa quali altre classi modello sono correlate ad essa fino a quando altre classi modello non vengono caricate?
+
+La risposta sta nell'app registry. 
+
+All'avvio, Django importa ogni applicazione elencata in INSTALLED_APPS, quindi il modulo models all'interno di ogni applicazione. 
+
+Ogni volta che viene creata una nuova classe di modello, Django aggiunge relazioni all'indietro a qualsiasi modello correlato. 
+
+Se i modelli correlati non sono ancora stati importati, Django tiene traccia delle relazioni e le aggiunge quando i modelli correlati vengono eventualmente importati.
+
+Per questo motivo, è particolarmente importante che tutti i modelli che stiamo utilizzando siano definiti nelle applicazioni elencate in INSTALLED_APPS. In caso contrario, le relazioni all'indietro potrebbero non funzionare correttamente.
+
+
+Query su oggetti correlati
+--------------------------
+
+Le query che coinvolgono oggetti correlati seguono le stesse regole delle query che coinvolgono campi con valori normali. Quando si specifica il valore di corrispondenza di una query, è possibile utilizzare un'istanza dell'oggetto stessa o il valore della chiave primaria per l'oggetto.
+
+Ad esempio, se abbiamo un oggetto Blog b con id=5, le tre query seguenti sarebbero identiche:
+
+	Entry.objects.filter(blog=b) # Query using object instance
+	Entry.objects.filter(blog=b.id) # Query using id from instance
+	Entry.objects.filter(blog=5) # Query using id directly
+
+
+
+Esecuzione di query SQL raw
+===========================
+
+Django offre due modi per eseguire query SQL raw: possiamo utilizzare Manager.raw() per eseguire query raw e restituire istanze del modello, oppure possiamo evitare completamente il livello del modello ed eseguire direttamente SQL personalizzate.
+
+Dovresti stare molto attento ogni volta che scrivi SQL raw. Ogni volta che lo si utilizza, è necessario eseguire correttamente l'escape di tutti i parametri che l'utente può controllare utilizzando paramsper proteggersi dagli attacchi SQL injection. Si prega di leggere di più sulla protezione SQL injection.
+
+
+Esecuzione di query raw
+-----------------------
+
+Il metodo manager raw() può essere utilizzato per eseguire query SQL raw che restituiscono istanze del modello:
+
+	Manager.raw(raw_query, params=(), translations=None)
+
+Questo metodo accetta una query SQL grezza, la esegue e restituisce un'istanza di tipo django.db.models.query.RawQuerySet. Questa istanza RawQuerySet può essere ripetuta come una normale QuerySet per fornire istanze di oggetti.
+
+Questo è meglio illustrato con un esempio. Supponiamo di avere il seguente modello:
+
+	class Person(models.Model):
+		first_name = models.CharField(...)
+		last_name = models.CharField(...)
+		birth_date = models.DateField(...)
+
+È quindi possibile eseguire SQL personalizzato in questo modo:
+
+	>>> for p in Person.objects.raw('SELECT * FROM myapp_person'):
+	...     print(p)
+		John Smith
+		Jane Jones
+
+Questo esempio non è molto esaltante, è esattamente lo stesso di eseguire Person.objects.all(); tuttavia, raw() ha un sacco di altre opzioni che lo rendono molto potente.
+
+
+Da dove viene il nome della Persontabella in nell'esempio?
+
+Per impostazione predefinita, Django calcola il nome di una tabella del database unendo l'"etichetta dell'app" del modello - il nome usato in manage.py startapp - al nome della classe del modello, con un trattino basso tra di loro. Nell'esempio abbiamo presupposto che il modello Person risieda in un'app denominata myapp, quindi la sua tabella sarebbe myapp_person.
+
+Attenzione. Non viene eseguito alcun controllo sull'istruzione SQL passata a .raw(). Django si aspetta che l'istruzione restituirà una serie di righe dal database, ma non fa nulla per applicarlo. Se la query non restituisce righe, si verificherà un errore (probabilmente criptico).
+
+Avvertimento. Se stiamo eseguendo query su MySQL, teniamo presente che la coercizione dei tipi silenziosi di MySQL può causare risultati imprevisti durante la miscelazione dei tipi. 
+
+Se si esegue una query su una colonna di tipo stringa, ma con un valore intero, MySQL costringerà i tipi di tutti i valori nella tabella a un numero intero prima di eseguire il confronto. Ad esempio, se la tabella contiene i valori 'abc', 'def' e si esegue una query per WHERE mycolumn=0, entrambe le righe corrisponderanno. Per evitare ciò, eseguire il typecasting corretto prima di utilizzare il valore in una query.
+
+Il valore predefinito dell'argomento params è stato modificato da None ad una tupla vuota.
+
+
+Mappatura dei campi di query ai campi del modello
+-------------------------------------------------
+
+Il metodo raw() associa automaticamente i campi della query ai campi del modello.
+
+L'ordine dei campi nella nostra query non ha importanza; in altre parole, entrambe le seguenti query funzionano in modo identico:
+
+	>>> Person.objects.raw('SELECT id, first_name, last_name, birth_date FROM myapp_person')
+	...
+	>>> Person.objects.raw('SELECT last_name, birth_date, first_name, id FROM myapp_person')
+	...
+
+La corrispondenza avviene per nome e ciò significa che è possibile utilizzare le clausole SQL AS per mappare i campi della query sui campi del modello. Quindi, se avessimo un'altra tabella che contiene dati Person, potremmo facilmente mapparla in istanzee Person:
+
+	>>> Person.objects.raw('''SELECT first AS first_name,
+	...                              last AS last_name,
+	...                              bd AS birth_date,
+	...                              pk AS id,
+	...                       FROM some_other_table''')
+
+Finché i nomi corrispondono, le istanze del modello verranno create correttamente.
+
+In alternativa, possiamo associare i campi della query ai campi del modello utilizzando l'argomento translations di raw(). Questo è un dizionario che associa i nomi dei campi nella query ai nomi dei campi nel modello. Ad esempio, la query di cui sopra potrebbe anche essere scritta:
+
+	>>> name_map = {'first': 'first_name', 'last': 'last_name', 'bd': 'birth_date', 'pk': 'id'}
+	>>> Person.objects.raw('SELECT * FROM some_other_table', translations=name_map)
+
+
+Ricerche nell'indice
+--------------------
+
+Il metodo raw() supporta l'indicizzazione, quindi se ci serve solo il primo risultato possiamo scrivere:
+
+	>>> first_person = Person.objects.raw('SELECT * FROM myapp_person')[0]
+
+Tuttavia, l'indicizzazione e lo slicing non vengono eseguiti a livello di database. Se nel database Person è presente un numero elevato di oggetti, è più efficiente limitare la query a livello SQL:
+
+	>>> first_person = Person.objects.raw('SELECT * FROM myapp_person LIMIT 1')[0]
+
+
+
+
+Rinviare i campi del modello
+-----------------------------
+
+I campi possono anche essere omessi:
+
+	>>> people = Person.objects.raw('SELECT id, first_name FROM myapp_person')
+
+Gli oggetti Person restituiti da questa query saranno istanze del modello posticipate (vedi defer()). Ciò significa che i campi omessi dalla query verranno caricati su richiesta. Per esempio:
+
+	>>> for p in Person.objects.raw('SELECT id, first_name FROM myapp_person'):
+	...     print(p.first_name, # This will be retrieved by the original query
+	...           p.last_name) # This will be retrieved on demand
+	...
+		John Smith
+		Jane Jones
+
+Esteriormente sembra che la query abbia recuperato sia il nome che il cognome, tuttavia, questo esempio ha effettivamente emesso 3 query. Solo i nomi sono stati recuperati dalla query raw(), i cognomi sono stati entrambi recuperati su richiesta quando sono stati stampati.
+
+C'è solo un campo che non possiamo omettere: il campo della chiave primaria. Django usa la chiave primaria per identificare le istanze del modello, quindi deve essere sempre inclusa in una query grezza. Verrà sollevata un'eccezione FieldDoesNotExist se si dimentica di includere la chiave primaria.
+
+
+Aggiunta di annotazioni
+-----------------------
+
+Possiamo anche eseguire query contenenti campi che non sono definiti nel modello. Ad esempio, potremmo usare la funzione age() di PostgreSQL per ottenere un elenco di persone con la loro età calcolata dal database:
+
+	>>> people = Person.objects.raw('SELECT *, age(birth_date) AS age FROM myapp_person')
+	>>> for p in people:
+	...     print("%s is %s." % (p.first_name, p.age))
+		John is 37.
+		Jane is 42.
+		...
+
+Spesso possiamo evitare di utilizzare SQL non elaborate per calcolare le annotazioni utilizzando invece un'espressione Func().
+
+
+Passare parametri in raw()
+--------------------------
+
+Se è necessario eseguire query parametrizzate, è possibile utilizzare l'argomento params di raw():
+
+	>>> lname = 'Doe'
+	>>> Person.objects.raw('SELECT * FROM myapp_person WHERE last_name = %s', [lname])
+
+
+L'argomento params è un elenco o un dizionario di parametri. Utilizzeremo i segnaposto %s nella stringa di query per un elenco, o  segnaposto %(key) per un dizionario (dove key viene sostituita da una chiave del dizionario), indipendentemente dal motore di database. Tali segnaposto verranno sostituiti con parametri dell'argomento params.
+
+
+Nota:  I parametri del dizionario non sono supportati dal backend SQLite; con questo backend, dobbiamo passare i parametri come una lista.
+
+Attenzione:  Non utilizzare la formattazione delle stringhe su query raw o virgolette segnaposto nelle stringhe SQL! Si è tentati di scrivere la query sopra come:
+
+	>>> query = 'SELECT * FROM myapp_person WHERE last_name = %s' % lname
+	>>> Person.objects.raw(query)
+
+Potremmo anche pensare che di scrivere la nostra query in questo modo (con virgolette intorno %s):
+
+	>>> query = "SELECT * FROM myapp_person WHERE last_name = '%s'"
+
+Non bisogna fare nessuno di questi errori.
+
+Usando l'argomento params e lasciando i segnaposto non quotati, ci si protegge dagli attacchi di tipo "SQL injection", un exploit comune in cui gli aggressori iniettano SQL arbitrario nel database. Se usiamo l'interpolazione di stringhe o citiamo il ​​segnaposto, siamo a rischio di SQL injection.
+
+Si veda a tal proposito "SQL injection protection" e "SQL injection attack": 
+
+	https://docs.djangoproject.com/en/4.0/topics/security/#sql-injection-protection
+	https://en.wikipedia.org/wiki/SQL_injection
+	
+
+Esecuzione diretta di SQL personalizzato
+----------------------------------------
+
+A volte anche il Manager.raw() non è abbastanza; potrebbe essere necessario eseguire query che non sono mappate in modo pulito ai modelli o eseguire direttamente query UPDATE, INSERT o DELETE.
+
+In questi casi, possiamo sempre accedere direttamente al database, instradando interamente il livello del modello.
+
+L'oggetto django.db.connection rappresenta la connessione predefinita al database; per utilizzare la connessione al database, chiamiamo connection.cursor() per ottenere un oggetto cursore, quindi chiamiamo cursor.execute(sql, [params]) per eseguire l'SQL e cursor.fetchone() o cursor.fetchall() per restituire le righe risultanti. Per esempio:
+
+	from django.db import connection
+
+	def my_custom_sql(self):
+		with connection.cursor() as cursor:
+			cursor.execute("UPDATE bar SET foo = 1 WHERE baz = %s", [self.baz])
+			cursor.execute("SELECT foo FROM bar WHERE baz = %s", [self.baz])
+			row = cursor.fetchone()
+
+		return row
+
+Per proteggersi dall'injection SQL, non è necessario includere virgolette attorno ai segnaposto %s nella stringa SQL.
+
+Si noti che se vogliamo includere i segni di percentuale letterale nella query, dobbiamo raddoppiarli nel caso in cui stiamo passando parametri:
+
+	cursor.execute("SELECT foo FROM bar WHERE baz = '30%'")
+	cursor.execute("SELECT foo FROM bar WHERE baz = '30%%' AND id = %s", [self.id])
+
+Se stiamo utilizzando più di un database , possiamo utilizzare django.db.connections per ottenere la connessione (e il cursore) per un database specifico. L'oggetto django.db.connections è simile a un dizionario che ci consente di recuperare una connessione specifica usando il suo alias:
+
+	from django.db import connections
+	with connections['my_db_alias'].cursor() as cursor:
+		# Your code here...
+
+Per impostazione predefinita, l'API di Python DB restituirà risultati senza i nomi dei campi, il che significa che si finisce con una lista di valori (list), piuttosto che un dizionario (dict); con un piccolo costo in termini di prestazioni e memoria, possiamo restituire risultati dict usando qualcosa del genere:
+
+	def dictfetchall(cursor):
+		"Return all rows from a cursor as a dict"
+		columns = [col[0] for col in cursor.description]
+		return [
+			dict(zip(columns, row))
+			for row in cursor.fetchall()
+		]
+
+Un'altra opzione è quella di utilizzare collections.namedtuple() dalla libreria standard di Python. Un namedtuple è un oggetto simile a una tupla che ha campi accessibili tramite la ricerca di attributi; è anche indicizzabile e iterabile. I risultati sono immutabili e accessibili tramite nomi di campo o indici, il che potrebbe essere utile:
+
+	from collections import namedtuple
+
+	def namedtuplefetchall(cursor):
+		"Return all rows from a cursor as a namedtuple"
+		desc = cursor.description
+		nt_result = namedtuple('Result', [col[0] for col in desc])
+		return [nt_result(*row) for row in cursor.fetchall()]
+
+Ecco un esempio della differenza tra i tre approcci:
+
+	>>> cursor.execute("SELECT id, parent_id FROM test LIMIT 2");
+	>>> cursor.fetchall()
+		((54360982, None), (54360880, None))
+
+	>>> cursor.execute("SELECT id, parent_id FROM test LIMIT 2");
+	>>> dictfetchall(cursor)
+		[{'parent_id': None, 'id': 54360982}, 
+		 {'parent_id': None, 'id': 54360880}]
+
+	>>> cursor.execute("SELECT id, parent_id FROM test LIMIT 2");
+	>>> results = namedtuplefetchall(cursor)
+	>>> results
+		[Result(id=54360982, parent_id=None), 
+		 Result(id=54360880, parent_id=None)]
+
+	>>> results[0].id
+		54360982
+	
+	>>> results[0][0]
+		54360982
+
+
+Collegamenti e cursori
+----------------------
+
+Gli oggetti connection e cursor per lo più implementano la standard Python DB-API descritta in PEP 249 — tranne quando si tratta di gestione delle transazioni.
+
+Se non si ha familiarità con l'API DB di Python, teniamo presente che l'istruzione SQL in cursor.execute() utilizza i segnaposto "%s", invece di aggiungere parametri direttamente all'interno dell'SQL. 
+
+Se si utilizza questa tecnica, la libreria del database sottostante sfuggirà automaticamente ai parametri secondo i casi.
+
+Si noti inoltre che Django si aspetta il segnaposto "%s", non il segnaposto "?", usati dai collegamenti SQLite Python; questo per motivi di coerenza e pulizia.
+
+Usare un cursore come gestore del contesto...
+
+	with connection.cursor() as c:
+		c.execute(...)
+
+... è equivalente a ...
+
+	c = connection.cursor()
+	try:
+		c.execute(...)
+	finally:
+		c.close()
+
+
+Chiamare le stored procedure
+----------------------------
+
+Formato ...
+
+	CursorWrapper.callproc(procname, params=None, kparams=None)
+
+Richiama una stored procedure del database con il nome specificato; essa può essere fornita con una sequenza (params) o un dizionario (kparams) di parametri di input; la maggior parte dei database non supporta kparams; finora dei backend integrati di Django, solo Oracle lo supporta.
+
+Ad esempio, data questa procedura memorizzata in un database Oracle ...
+
+	CREATE PROCEDURE "TEST_PROCEDURE"(v_i INTEGER, v_text NVARCHAR2(10)) AS
+		p_i INTEGER;
+		p_text NVARCHAR2(10);
+	BEGIN
+		p_i := v_i;
+		p_text := v_text;
+		...
+	END;
+
+... la chiamata potrà essere ...
+
+	with connection.cursor() as cursor:
+		cursor.callproc('test_procedure', [1, 'test'])
+
+
+
+
+Query di Aggregazione
+=====================
+
+Finora agli argomenti sull'API di estrazione del database di Django hanno descritto il modo in cui è possibile utilizzare le query Django che creano, recuperano, aggiornano ed eliminano singoli oggetti. 
+
+Tuttavia, a volte sarà necessario recuperare i valori derivati ​​dal riepilogo o dall'aggregazione di una raccolta di oggetti. Questa guida agli argomenti descrive i modi in cui i valori aggregati possono essere generati e restituiti utilizzando le query Django.
+
+In questa guida faremo riferimento ai seguenti modelli. Questi modelli vengono utilizzati per tracciare l'inventario di una serie di librerie online:
+
+	from django.db import models
+
+	class Author(models.Model):
+		name = models.CharField(max_length=100)
+		age = models.IntegerField()
+
+	class Publisher(models.Model):
+		name = models.CharField(max_length=300)
+
+	class Book(models.Model):
+		name = models.CharField(max_length=300)
+		pages = models.IntegerField()
+		price = models.DecimalField(max_digits=10, decimal_places=2)
+		rating = models.FloatField()
+		authors = models.ManyToManyField(Author)
+		publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE)
+		pubdate = models.DateField()
+
+	class Store(models.Model):
+		name = models.CharField(max_length=300)
+		books = models.ManyToManyField(Book)
+
+
+Guida rapida: ecco come eseguire query di aggregazione più comuni, assumendo i modelli precedenti:
+
+	# Numero totale di libri (Book)
+	>>> Book.objects.count()
+		2452
+
+	# Numero totale di libri dove l'editore è BaloneyPress
+	>>> Book.objects.filter(publisher__name='BaloneyPress').count()
+		73
+
+	# Prezzo medio di tutti i libri
+	>>> from django.db.models import Avg
+	>>> Book.objects.all().aggregate(Avg('price'))
+		{'price__avg': 34.35}
+
+	# Prezzo massimo fra tutti i libri
+	>>> from django.db.models import Max
+	>>> Book.objects.all().aggregate(Max('price'))
+		{'price__max': Decimal('81.20')}
+
+	# Differenza tra il libro più costoso 
+	# e il prezzo medio di tutti i libri.
+	>>> from django.db.models import FloatField
+	>>> Book.objects.aggregate(
+	...     price_diff=Max('price', output_field=FloatField()) 
+							- Avg('price'))
+		{'price_diff': 46.85}
+
+	# Tutte le seguenti query implicano l'attraversamento di
+	# Book<->Publisher relazione all'indietro della chiave esterna.
+
+	# Ogni editore, ognuno con un conteggio di libri 
+	# come attributo "num_books".
+	>>> from django.db.models import Count
+	>>> pubs = Publisher.objects.annotate(num_books=Count('book'))
+	>>> pubs
+		<QuerySet [<Publisher: BaloneyPress>, 
+		<Publisher: SalamiPress>, ...]>
+	>>> pubs[0].num_books
+		73
+
+	# Ogni editore, con un conteggio separato di libri 
+	# con una valutazione superiore e inferiore a 5
+	>>> from django.db.models import Q
+	>>> above_5 = Count('book', filter=Q(book__rating__gt=5))
+	>>> below_5 = Count('book', filter=Q(book__rating__lte=5))
+	>>> pubs = Publisher.objects.annotate(below_5=below_5)
+				  .annotate(above_5=above_5)
+	>>> pubs[0].above_5
+		23
+	>>> pubs[0].below_5
+		12
+
+	# I primi 5 editori, in ordine per numero di libri.
+	>>> pubs = Publisher.objects.annotate(num_books=Count('book'))
+				  .order_by('-num_books')[:5]
+	>>> pubs[0].num_books
+		1323
+
+
+Generazione di aggregati su un QuerySet
+---------------------------------------
+
+Django fornisce due modi per generare aggregati. Il primo modo consiste nel generare valori di riepilogo su un intero file QuerySet. Ad esempio, supponiamo di voler calcolare il prezzo medio di tutti i libri disponibili per la vendita. La sintassi delle query di Django fornisce un mezzo per descrivere l'insieme di tutti i libri:
+
+	>>> Book.objects.all()
+
+Quello di cui abbiamo bisogno è un modo per calcolare i valori di riepilogo sugli oggetti che ne fanno parte QuerySet. Questo viene fatto aggiungendo una clausola aggregate() al QuerySet:
+
+	>>> from django.db.models import Avg
+	>>> Book.objects.all().aggregate(Avg('price'))
+		{'price__avg': 34.35}
+
+In questo esempio all() è ridondante, quindi potrebbe essere semplificato in:
+
+	>>> Book.objects.aggregate(Avg('price'))
+		{'price__avg': 34.35}
+
+L'argomento della clausola aggregate() descrive il valore aggregato che vogliamo calcolare, in questo caso la media del campo price sul modello Book. Un elenco delle funzioni aggregate disponibili è disponibile nel riferimento QuerySet:
+
+	https://docs.djangoproject.com/en/4.0/ref/models/querysets/#aggregation-functions
+
+La aggregate() è una clausola terminale per una QuerySet che, quando invocata, restituisce un dizionario di coppie nome-valore. Il nome è un identificatore per il valore aggregato; il valore è l'aggregato calcolato.
+
+Il nome viene generato automaticamente dal nome del campo e dalla funzione di aggregazione. Se desideriamo specificare manualmente un nome per il valore aggregato, possiamo farlo fornendo quel nome quando specifichiamo la clausola aggregata:
+
+	>>> Book.objects.aggregate(average_price=Avg('price'))
+		{'average_price': 34.35}
+
+Se vogliamo generare più di un aggregato, aggiungiamo un altro argomento alla clausola aggregate(); quindi, se volessimo conoscere anche il prezzo massimo e minimo di tutti i libri, emetteremmo la query:
+
+	>>> from django.db.models import Avg, Max, Min
+	>>> Book.objects.aggregate(Avg('price'), Max('price'), Min('price'))
+		{'price__avg': 34.35, 'price__max': Decimal('81.20'), 
+		 'price__min': Decimal('12.99')}
+
+
+Generazione di aggregati per ogni articolo in un QuerySet
+---------------------------------------------------------
+
+Il secondo modo per generare valori di riepilogo consiste nel generare un riepilogo indipendente per ogni oggetto in un file QuerySet. Ad esempio, se stiamo recuperando un elenco di libri, potremmo voler sapere quanti autori hanno contribuito a ciascun libro. Ogni Libro ha un rapporto molti-a-molti con l'Autore; vogliamo riassumere questa relazione per ogni libro del QuerySet.
+
+I riepiloghi per oggetto possono essere generati utilizzando la clausola annotate(). Quando viene specificata una clausola annotate(), ogni oggetto in QuerySet verrà annotato con i valori specificati.
+
+La sintassi per queste annotazioni è identica a quella utilizzata per la clausola aggregate(). Ogni argomento per annotate() descrive un aggregato che deve essere calcolato. Ad esempio, per annotare libri con il numero di autori:
+
+	# Crea un set di query annotato
+	>>> from django.db.models import Count
+	>>> q = Book.objects.annotate(Count('authors'))
+
+	# Interroga il primo oggetto nel queryset
+	>>> q[0]
+		<Book: The Definitive Guide to Django>
+	>>> q[0].authors__count
+		2
+
+	# Interroga il secondo oggetto nel queryset
+	>>> q[1]
+		<Book: Practical Django Projects>
+	>>> q[1].authors__count
+		1
+
+Come per aggregate(), il nome dell'annotazione viene automaticamente derivato dal nome della funzione di aggregazione e dal nome del campo da aggregare; possiamo sovrascrivere questo nome predefinito fornendo un alias quando specifichiamo l'annotazione:
+
+	>>> q = Book.objects.annotate(num_authors=Count('authors'))
+	>>> q[0].num_authors
+		2
+	>>> q[1].num_authors
+		1
+	
+A differenza di aggregate(), annotate() non è una clausola terminale. L'output della clausola annotate() è un QuerySet; questo QuerySetpuò essere modificato utilizzando qualsiasi altra operazione QuerySet, incluse filter(), order_by() o anche chiamate aggiuntive ad annotate().
+
+
+Combinare più aggregazioni
+--------------------------
+
+La combinazione di più aggregazioni con annotate() produrrà risultati errati perché vengono utilizzati i join anziché le sottoquery:
+
+	>>> book = Book.objects.first()
+	>>> book.authors.count()
+		2
+	>>> book.store_set.count()
+		3
+	>>> q = Book.objects.annotate(Count('authors'), Count('store'))
+	>>> q[0].authors__count
+		6
+	>>> q[0].store__count
+		6
+
+Per la maggior parte degli aggregati, non c'è modo di evitare questo problema, tuttavia, l'aggregato Count ha un parametro distinct che può essere utile:
+
+	>>> q = Book.objects.annotate(Count('authors', distinct=True), Count('store', distinct=True))
+	>>> q[0].authors__count
+		2
+	>>> q[0].store__count
+		3
+
+In caso di dubbio, controlla la query SQL; ovvero per capire cosa succede nella nostra query, considera di ispezionare la proprietà query del nostro file QuerySet.
+
+
+Join e aggregati
+----------------
+
+Finora abbiamo trattato gli aggregati sui campi che appartengono al modello interrogato. Tuttavia, a volte il valore che desideriamo aggregare apparterrà a un modello correlato al modello che stiamo interrogando.
+
+Quando si specifica il campo da aggregare in una funzione di aggregazione, Django consentirà di utilizzare la stessa notazione di doppia sottolineatura utilizzata quando si fa riferimento a campi correlati nei filtri. Django gestirà quindi tutti i join di tabella necessari per recuperare e aggregare il valore correlato.
+
+Ad esempio, per trovare la fascia di prezzo dei libri offerti in ogni negozio, possiamo utilizzare l'annotazione:
+
+	>>> from django.db.models import Max, Min
+	>>> Store.objects.annotate(min_price=Min('books__price'), 
+							   max_price=Max('books__price'))
+
+Questo dice a Django di recuperare il modello Store, unirsi (attraverso la relazione molti-a-molti) con il modello Book e aggregare sul campo prezzo del modello libro per produrre un valore minimo e massimo.
+
+Le stesse regole si applicano alla clausola aggregate(); se desideriamo conoscere il prezzo più basso e più alto di qualsiasi libro disponibile per la vendita in uno qualsiasi dei negozi, possiamo utilizzare l'aggregato:
+
+	>>> Store.objects.aggregate(min_price=Min('books__price'), 
+								max_price=Max('books__price'))
+
+Le catene di unione possono essere profonde quanto desideri. Ad esempio, per estrarre l'età dell'autore più giovane di qualsiasi libro disponibile per la vendita, potremmo emettere la query:
+
+	>>> Store.objects.aggregate(youngest_age=Min('books__authors__age'))
+
+
+Seguendo le relazioni a ritroso
+-------------------------------
+
+In modo simile alle ricerche che si estendono su relazioni, aggregazioni e annotazioni su campi di modelli o modelli correlati a quello che stiamo interrogando possono includere l'attraversamento di relazioni "inverse". Anche qui vengono utilizzati i nomi minuscoli dei modelli correlati e i caratteri di sottolineatura doppia.
+
+Ad esempio, possiamo chiedere a tutti gli editori, annotati con i rispettivi contatori di stock di libri totali (notare come utilizziamo 'book' per specificare il Publisher -> Bookhop della chiave esterna inversa):
+
+	>>> from django.db.models import Avg, Count, Min, Sum
+	>>> Publisher.objects.annotate(Count('book'))
+
+Ogni Publisher nel risultante QuerySet avrà un attributo aggiuntivo chiamato book__count.
+
+Possiamo anche richiedere il libro più vecchio tra quelli gestiti da ogni editore:
+
+	>>> Publisher.objects.aggregate(oldest_pubdate=Min('book__pubdate'))
+
+Il dizionario risultante avrà una chiave chiamata 'oldest_pubdate'. Se non fosse specificato alcun alias, sarebbe piuttosto lungo 'book__pubdate__min'.
+
+Questo non si applica solo alle chiavi esterne. Funziona anche con relazioni molti-a-molti. Ad esempio, possiamo chiedere per ogni autore, annotato con il numero totale di pagine considerando tutti i libri di cui l'autore è statp co-autore (notare come utilizziamo 'book' per specificare la relazione esterna Author-> Book molti-a-molti inversa):
+
+	>>> Author.objects.annotate(total_pages=Sum('book__pages'))
+
+Ogni Author nel QuerySet risultante avrà un attributo aggiuntivo chiamato total_pages. Se non fosse specificato alcun alias, sarebbe piuttosto grande il valore di book__pages__sum.
+
+Oppure chiediamo la valutazione media di tutti i libri scritti dagli autori che abbiamo in archivio:
+
+	>>> Author.objects.aggregate(average_rating=Avg('book__rating'))
+
+Il dizionario risultante avrà una chiave chiamata 'average_rating'; se non fosse specificato alcun alias, sarebbe piuttosto grande 'book__rating__avg'.
+
+
+Aggregazioni e altre clausole QuerySet
+======================================
+
+filter() e exclude()
+--------------------
+
+Gli aggregati possono anche partecipare ai filtri; qualsiasi filter() (o exclude()) applicato ai normali campi del modello avrà l'effetto di vincolare gli oggetti considerati per l'aggregazione.
+
+Se utilizzato con una clausola annotate(), un filtro ha l'effetto di vincolare gli oggetti per i quali viene calcolata un'annotazione. Ad esempio, possiamo generare un elenco annotato di tutti i libri che hanno un titolo che inizia con "Django" utilizzando la query:
+
+	>>> from django.db.models import Avg, Count
+	>>> Book.objects.filter(name__startswith="Django")
+					.annotate(num_authors=Count('authors'))
+
+Quando viene utilizzato con una clausola aggregate(), un filtro ha l'effetto di vincolare gli oggetti su cui viene calcolata l'aggregazione; ad esempio, possiamo generare il prezzo medio di tutti i libri con un titolo che inizia con "Django" utilizzando la query:
+
+	>>> Book.objects.filter(name__startswith="Django").aggregate(Avg('price'))
+
+
+Filtraggio sulle annotazioni
+----------------------------
+
+I valori annotati possono anche essere filtrati; l'alias per l'annotazione può essere utilizzato nelle clausole filter() e exclude() allo stesso modo di qualsiasi altro campo del modello.
+
+Ad esempio, per generare un elenco di libri che hanno più di un autore, possiamo inviare la query:
+
+	>>> Book.objects.annotate(num_authors=Count('authors'))
+						.filter(num_authors__gt=1)
+
+Questa query genera un set annotato di risultati e quindi genera un filtro basato su tale annotazione.
+
+Se abbiamo bisogno di due annotazioni con due filtri separati, possiamo utilizzare l'argomento filter con qualsiasi aggregato. Ad esempio, per generare un elenco di autori con un conteggio di libri con valutazioni elevate:
+
+	>>> highly_rated = Count('book', filter=Q(book__rating__gte=7))
+	>>> Author.objects.annotate(num_books=Count('book'), 
+								highly_rated_books=highly_rated)
+
+Ciascuno Author nel set di risultati avrà gli attributi num_books e highly_rated_books. Vedi anche Aggregazione condizionale in:
+
+	https://docs.djangoproject.com/en/4.0/ref/models/conditional-expressions/#conditional-aggregation
+
+
+[ Scegliere tra filter e QuerySet.filter() ]
+
+Evitiamo di utilizzare l'argomento filter con una singola annotazione o aggregazione. È più efficiente da usare QuerySet.filter() per escludere le righe. L'argomento aggregazione filter è utile solo quando si utilizzano due o più aggregazioni sulle stesse relazioni con condizionali diversi.
+
+
+[ Ordine delle clausole annotate() e filter() ]
+
+Quando si sviluppa una query complessa che coinvolge entrambe le clausole annotate() e filter(), prestare particolare attenzione all'ordine in cui le clausole vengono applicate al file QuerySet.
+
+Quando una clausola annotate() viene applicata a una query, l'annotazione viene calcolata sullo stato della query fino al punto in cui viene richiesta l'annotazione. L'implicazione pratica di ciò è che filter() e annotate() non siano operazioni commutative.
+
+Dato il contesto:
+
+	L'editore A ha due libri con rating 4 e 5.
+	L'editore B ha due libri con rating 1 e 4.
+	L'editore C ha un libro con valutazione 1.
+
+... ecco un esempio con l'aggregato Count:
+
+	>>> a, b = Publisher.objects.annotate(num_books=Count('book', distinct=True)).filter(book__rating__gt=3.0)
+	>>> a, a.num_books
+		(<Publisher: A>, 2)
+	>>> b, b.num_books
+		(<Publisher: B>, 2)
+
+	>>> a, b = Publisher.objects.filter(book__rating__gt=3.0).annotate(num_books=Count('book'))
+	>>> a, a.num_books
+		(<Publisher: A>, 2)
+	>>> b, b.num_books
+		(<Publisher: B>, 1)
+
+Entrambe le query restituiscono un elenco di editori che hanno almeno un libro con una valutazione superiore a 3.0, quindi l'editore C è escluso.
+
+Nella prima query, l'annotazione precede il filtro, quindi il filtro non ha alcun effetto sull'annotazione; distinct=True è necessario per evitare un bug della query.
+
+La seconda query conta il numero di libri che hanno una valutazione superiore a 3.0 per ciascun editore; il filtro precede l'annotazione, quindi il filtro vincola gli oggetti considerati durante il calcolo dell'annotazione.
+
+Ecco un altro esempio con l'aggregato Avg:
+
+	>>> a, b = Publisher.objects.annotate(avg_rating=Avg('book__rating'))
+									.filter(book__rating__gt=3.0)
+	>>> a, a.avg_rating
+		(<Publisher: A>, 4.5)  # (5+4)/2
+	>>> b, b.avg_rating
+		(<Publisher: B>, 2.5)  # (1+4)/2
+
+	>>> a, b = Publisher.objects.filter(book__rating__gt=3.0)
+									.annotate(avg_rating=Avg('book__rating'))
+	>>> a, a.avg_rating
+		(<Publisher: A>, 4.5)  # (5+4)/2
+	>>> b, b.avg_rating
+		(<Publisher: B>, 4.0)  # 4/1 (book with rating 1 excluded)
+
+La prima query richiede la valutazione media di tutti i libri di un editore per gli editori che hanno almeno un libro con una valutazione superiore a 3.0. La seconda query richiede la media delle valutazioni di un libro di un editore solo per quelle valutazioni superiori a 3.0.
+
+È difficile intuire come l'ORM tradurrà set di query complesse in query SQL, quindi in caso di dubbio, ispezionare l'SQL str(queryset.query) e scrivere molti test.
+
+
+order_by()
+----------
+
+Le annotazioni possono essere utilizzate come base per l'ordine. Quando si definisce una clausola order_by(), gli aggregati forniti possono fare riferimento a qualsiasi alias definito come parte di una clausola annotate() nella query.
+
+Ad esempio, per ordinare uno QuerySet dei libri in base al numero di autori che hanno contribuito al libro, è possibile utilizzare la seguente query:
+
+	>>> Book.objects.annotate(num_authors=Count('authors'))
+								.order_by('num_authors')
+
+
+values()
+--------
+
+Di solito, le annotazioni vengono generate in base all'oggetto; un'annotazione QuerySet restituirà un risultato per ogni oggetto nell'originale QuerySet. 
+
+Tuttavia, quando una clausola values() viene utilizzata per vincolare le colonne restituite nel set di risultati, il metodo per valutare le annotazioni è leggermente diverso. Invece di restituire un risultato annotato per ogni risultato nell'originale QuerySet, i risultati originali vengono raggruppati in base alle combinazioni univoche dei campi specificati nella clausola values(). Viene quindi fornita un'annotazione per ogni gruppo univoco; l'annotazione viene calcolata su tutti i membri del gruppo.
+
+Ad esempio, considera una query dell'autore che tenta di scoprire la valutazione media dei libri scritti da ciascun autore:
+
+	>>> Author.objects.annotate(average_rating=Avg('book__rating'))
+
+Questo restituirà un risultato per ogni autore nel database, annotato con la valutazione media del libro.
+
+Tuttavia, il risultato sarà leggermente diverso se si utilizza una clausola values():
+
+	>>> Author.objects.values('name').annotate(average_rating=Avg('book__rating'))
+
+In questo esempio, gli autori saranno raggruppati per nome, quindi otterremo solo un risultato annotato per ogni nome univoco dell'autore. 
+
+Ciò significa che se abbiamo due autori con lo stesso nome, i loro risultati verranno uniti in un unico risultato nell'output della query; la media sarà calcolata come media sui libri scritti da entrambi gli autori.
+
+
+[ Ordine delle clausole annotate() e values() ]
+
+Come per la clausola filter(), l'ordine in cui le clausole annotate() e values() vengono applicate a una query è significativo. Se la clausola values() precede annotate(), l'annotazione verrà calcolata utilizzando il raggruppamento descritto dalla values().
+
+Tuttavia, se la clausola annotate() precede la clausola values(), le annotazioni verranno generate sull'intero set di query. In questo caso, la clausola values() vincola solo i campi generati in output.
+
+Ad esempio, se invertiamo l'ordine della clausola values() e annotate() del nostro esempio precedente ...
+
+	>>> Author.objects.annotate(average_rating=Avg('book__rating'))
+									.values('name', 'average_rating')
+
+... questo produrrà un risultato unico per ogni autore;  tuttavia, nei dati di output verranno restituiti solo il nome dell'autore e l'annotazione average_rating.
+
+Dovremmo anche notare che average_rating è stato esplicitamente incluso nell'elenco dei valori da restituire. Ciò è necessario a causa dell'ordinamento della clausola values() e annotate().
+
+Se la clausola values() precede la clausola annotate(), eventuali annotazioni verranno automaticamente aggiunte al set di risultati. Tuttavia, se la clausola values() viene applicata dopo la clausola annotate(), è necessario includere esplicitamente la colonna di aggregazione.
+
+Interazione con order_by()
+--------------------------
+
+I campi citati nella order_by() parte di un set di query vengono utilizzati quando si selezionano i dati di output, anche se non sono specificati in altro modo nella chiamata values(). Questi campi aggiuntivi vengono utilizzati per raggruppare i risultati "mi piace" e possono far sembrare separate righe di risultati altrimenti identiche. Questo si manifesta, in particolare, quando si contano le cose.
+
+A titolo di esempio, supponiamo di avere un modello come questo:
+
+	from django.db import models
+
+	class Item(models.Model):
+		name = models.CharField(max_length=10)
+		data = models.IntegerField()
+	
+Se vogliamo contare quante volte ogni datavalore distinto appare in un set di query ordinato, possiamo provare questo...
+
+	items = Item.objects.order_by('name')
+	# Warning: not quite correct!
+	items.values('data').annotate(Count('id'))
+
+...che raggrupperà gli oggetti Item in base ai loro valori "data" comuni e quindi conteggerà il numero di valori "id" in ciascun gruppo.
+
+Solo che non funzionerà del tutto; anche l'ordinamento per "name" svolgerà un ruolo nel raggruppamento, quindi questa query raggrupperà per coppie distinte (data, name), che non è quello che desideriamo. Invece, dovremmo costruire questo set di query: 
+
+	items.values('data').annotate(Count('id')).order_by()
+
+...cancellando qualsiasi ordinamento nella query. Potremmo anche ordinare, ad esempio, "data" senza effetti dannosi, poiché questo sta già giocando un ruolo nella query.
+
+Questo comportamento è lo stesso di quello notato nella documentazione di queryset distinct() e la regola generale è la stessa: normalmente non vorremo che colonne extra abbiano un ruolo nel risultato, quindi cancelliamo l'ordine, o almeno assicuriamoci che sia limitato solo a quei campi selezionati anche in una chiamata values().
+
+Nota:  Potremmo ragionevolmente chiedere perché Django non rimuove le colonne estranee per noi. 
+
+Il motivo principale è la coerenza con distinct() e altri contesti: Django non rimuove mai i vincoli di ordinamento che abbiamo specificato (e non possiamo modificare il comportamento di quegli altri metodi, poiché ciò violerebbe la nostra politica di stabilità dell'API).
+
+
+Annotazioni di aggregazione
+---------------------------
+
+Possiamo anche generare un aggregato sul risultato di un'annotazione. Quando si definisce una clausola aggregate(), gli aggregati forniti possono fare riferimento a qualsiasi alias definito come parte di una clausola annotate() nella query.
+
+Ad esempio, se desideriamo calcolare il numero medio di autori per libro, dobbiamo prima annotare l'insieme di libri con il conteggio degli autori, quindi aggregare il conteggio degli autori, facendo riferimento al campo di annotazione:
+
+	>>> from django.db.models import Avg, Count
+	>>> Book.objects.annotate(num_authors=Count('authors')).aggregate(Avg('num_authors'))
+		{'num_authors__avg': 1.66}
+
+
+
+Ricerca
+=======
+
+Un'attività comune per le applicazioni Web consiste nel cercare alcuni dati nel database con l'input dell'utente. In un caso semplice, questo potrebbe essere il filtraggio di un elenco di oggetti in base a una categoria. Un caso d'uso più complesso potrebbe richiedere la ricerca con ponderazione, categorizzazione, evidenziazione, più lingue e così via. Questo documento spiega alcuni dei possibili casi d'uso e gli strumenti che è possibile utilizzare.
+
+Faremo riferimento ai seguenti modelli:
+
+	from datetime import date
+
+	from django.db import models
+
+	class Blog(models.Model):
+		name = models.CharField(max_length=100)
+		tagline = models.TextField()
+
+		def __str__(self):
+			return self.name
+
+	class Author(models.Model):
+		name = models.CharField(max_length=200)
+		email = models.EmailField()
+
+		def __str__(self):
+			return self.name
+
+	class Entry(models.Model):
+		blog = models.ForeignKey(Blog, on_delete=models.CASCADE)
+		headline = models.CharField(max_length=255)
+		body_text = models.TextField()
+		pub_date = models.DateField()
+		mod_date = models.DateField(default=date.today)
+		authors = models.ManyToManyField(Author)
+		number_of_comments = models.IntegerField(default=0)
+		number_of_pingbacks = models.IntegerField(default=0)
+		rating = models.IntegerField(default=5)
+
+		def __str__(self):
+			return self.headline
+
+
+Query testuali standard
+-----------------------
+
+I campi basati su testo hanno una selezione di operazioni di corrispondenza. Ad esempio, potremmo voler consentire la ricerca di un autore in questo modo:
+
+	>>> Author.objects.filter(name__contains='Terry')
+	[<Author: Terry Gilliam>, <Author: Terry Jones>]
+
+Questa è una soluzione molto fragile in quanto richiede all'utente di conoscere una sottostringa esatta del nome dell'autore. Un approccio migliore potrebbe essere una corrispondenza senza distinzione tra maiuscole e minuscole (icontains), ma questo è solo leggermente migliore.
+
+
+Le funzioni di confronto più avanzate di un database
+----------------------------------------------------
+
+Se stiamo usando PostgreSQL, Django fornisce una selezione di strumenti specifici del database per consentirti di sfruttare opzioni di query più complesse. Altri database hanno diverse selezioni di strumenti, possibilmente tramite plug-in o funzioni definite dall'utente, ma Django non include alcun supporto per loro in questo momento. Useremo alcuni esempi di PostgreSQL per dimostrare il tipo di funzionalità che i database possono avere.
+
+
+Ricerca in altri database
+-------------------------
+
+Tutti gli strumenti di ricerca forniti da django.contrib.postgres sono costruiti interamente su API pubbliche come ricerche personalizzate e funzioni di database. 
+
+A seconda del database, dovremmo essere in grado di creare query per consentire API simili.
+
+Nell'esempio precedente, abbiamo stabilito che una ricerca senza distinzione tra maiuscole e minuscole sarebbe stata più utile. Quando si tratta di nomi non inglesi, un ulteriore miglioramento consiste nell'usare unaccented comparison ...
+
+	>>> Author.objects.filter(name__unaccent__icontains='Helen')
+		[<Author: Helen Mirren>, <Author: Helena Bonham Carter>, <Author: Hélène Joy>]
+
+Questo mostra un altro problema, in cui stiamo confrontando con un'ortografia diversa del nome. In questo caso però abbiamo un'asimmetria: una ricerca di Helen aggancerebbe Helena o Hélène, ma non il contrario. Un'altra opzione sarebbe quella di utilizzare un confronto trigram_similar, che confronta sequenze di lettere. Per esempio:
+
+	>>> Author.objects.filter(name__unaccent__lower__trigram_similar='Hélène')
+		[<Author: Helen Mirren>, <Author: Hélène Joy>]
+
+Ora abbiamo un problema diverso: il nome più lungo di "Helena Bonham Carter" non compare perché è molto più lungo. Le ricerche Trigram prendono in considerazione tutte le combinazioni di tre lettere e confrontano quante appaiono nelle stringhe di ricerca e di origine. 
+
+Per il nome più lungo, ci sono più combinazioni che non compaiono nella stringa di origine, quindi non è più considerata una corrispondenza ravvicinata.
+
+La scelta corretta delle funzioni di confronto qui dipende dal nostro particolare set di dati, ad esempio dalla lingua o dalle lingue utilizzate e dal tipo di testo cercato. Tutti gli esempi che abbiamo visto sono su stringhe brevi in ​​cui è probabile che l'utente inserisca qualcosa di vicino (con definizioni variabili) ai dati di origine.
+
+
+Ricerca basata su documenti
+---------------------------
+
+Le operazioni standard del database smettono di essere un approccio utile quando si inizia a considerare grandi blocchi di testo. Mentre gli esempi sopra possono essere pensati come operazioni su una stringa di caratteri, la ricerca full-text esamina le parole effettive. A seconda del sistema utilizzato, è probabile che utilizzi alcune delle seguenti idee:
+
+	- Ignorando le "parole di arresto" come "a", "il", "e".
+
+	- Operando lo stemming, in modo che "pony" e "ponies" siano considerate parole simili.
+
+	- Ponderando delle parole in base a criteri diversi, come la frequenza con cui appaiono nel testo o l'importanza dei campi, come il titolo o le parole chiave, in cui appaiono.
+	
+Esistono molte alternative per l'utilizzo del software di ricerca, alcune delle più importanti sono Elastic e Solr . Si tratta di soluzioni di ricerca complete basate su documenti. Per usarli con i dati dei modelli Django, avremo bisogno di un livello che traduca i nostri dati in un documento testuale, inclusi i riferimenti agli ID del database. Quando una ricerca che utilizza il motore restituisce un determinato documento, è quindi possibile cercarlo nel database. Esistono numerose librerie di terze parti progettate per aiutare con questo processo.
+
+
+Supporto PostgreSQL
+-------------------
+
+PostgreSQL ha la sua implementazione di ricerca full-text integrata. Sebbene non sia potente come altri motori di ricerca, ha il vantaggio di essere all'interno del nostro database e quindi può essere facilmente combinato con altre query relazionali come la categorizzazione.
+
+Il modulo django.contrib.postgres fornisce alcuni helpers per fare queste query. Ad esempio, una query potrebbe selezionare tutti i post di blog che menzionano "cheese":
+
+	>>> Entry.objects.filter(body_text__search='cheese')
+		[<Entry: Cheese on Toast recipes>, <Entry: Pizza recipes>]
+
+Possiamo anche filtrare su una combinazione di campi e su modelli correlati:
+
+	>>> Entry.objects.annotate(
+	...     search=SearchVector('blog__tagline', 'body_text'),
+	... ).filter(search='cheese')
+	[
+		<Entry: Cheese on Toast recipes>,
+		<Entry: Pizza Recipes>,
+		<Entry: Dairy farming in Argentina>,
+	]
+
+Per i dettagli su contrib.postgres "Full text search" vedere il documento:
+
+	https://docs.djangoproject.com/en/4.0/ref/contrib/postgres/search/
+

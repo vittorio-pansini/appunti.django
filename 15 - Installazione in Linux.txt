@@ -1,6 +1,6 @@
 **********************************
  15 - Installazione in Linux
-      [1.1.0]
+      [1.3.0]
 **********************************
 
 Finora, abbiamo utilizzato il server di sviluppo Django sia per eseguire il codice Python sia per servire i file statici e multimediali, mentre in realtà ricordiamo che il server di sviluppo Django non è adatto per l'uso in produzione, non è progettato per eseguire più processi o gestire molti utenti, ma soprattutto, non viene eseguito quando l'impostazione DEBUG è impostata su True.
@@ -194,8 +194,8 @@ Andiamo a creare i percorsi ed assegnare i permessi.
 Con il comando chown [utente]:[gruppo] ... andiamo ad impostare l'utente e i gruppi proprietari che potranno accedere ai percorsi del sito; quindi andiamo ad impostare i permessi di accesso:
 
 	$ sudo chmod 755 /var/www/agenziaweb
-	$ sudo mkdir 750 /var/www/agenziaweb/static
-	$ sudo mkdir 750 /var/www/agenziaweb/media
+	$ sudo chmod 750 /var/www/agenziaweb/static
+	$ sudo chmod 750 /var/www/agenziaweb/media
 	
 	$ ls -al /var/www/agenziaweb
 
@@ -253,6 +253,14 @@ Ora modifichiamo l'impostazione di MEDIA_ROOT che attualmente è una stringa sta
 
 Questo farà leggere MEDIA_ROOT dalla variabile di ambiente DJANGO_MEDIA_ROOT se è impostata, altrimenti ritorna il valore "locale" \AGENZIAW\media.
 
+Riportiamo infine per completezza il contenuto della classe derivata Prod() che applica esplicitamente la lettura di altre variabili di ambiente importanti.
+
+	class Prod(Dev):
+		DEBUG = False
+		SECRET_KEY = values.SecretValue()
+		ALLOWED_HOSTS = values.ListValue([])  # ['153.92.221.13', '.vpagenziaweb', '.vpagenziaweb.it',]
+		DATABASES = values.DatabaseURLValue(environ_prefix="DJANGO_")
+
 
 Creazione del file production.conf
 ----------------------------------
@@ -300,32 +308,9 @@ Seguono le righe che indicano la posizione fisica delle directory /media e /stat
 
 L'impostazione ALLOWED_HOSTS che segue è un elenco di IP e/o nomi di host che possono essere utilizzati per accedere al sito tramite SSH; presentiamo due esempi, nel primo indichiamo l'indirizzo IP di un computer di servizio, mentre nel secondo indichiamo come unico utilizzato l'host locale; si noti che è possibile indicare più indirizzi, dividendoli tramite virgola (e senza spazi!); quando eseguiamo la distribuzione su un server virtuale ospitato, utilizzeremo i nomi di dominio che abbiamo scelto per il nostro sito.
 
-Comunque se non funziona l'export col metodo assunto prima (e come verificato nelle prove) è meglio "forzarne" il funzionamento con un batch più diretto che chiamiamo esporta.conf
+Nella classe Prod() infatti questa lista di valori viene trasformata in una "vera" lista Python dalla funzione values.ListValue() e assegnata a ALLOWED_HOSTS; quest'ultima variabile DEVE essere una lista, anche se di un solo valore, altrimenti, in maniera molto subdola, gunicorn NON farà accedere il sistema proprio al sito e verrà restituito un errore "502 Bad Gateway"
 
-	export DJANGO_CONFIGURATION="Prod"
-	export DJANGO_SECRET_KEY="O%BU(ZY5vn9bFz5Zl1Kl4x4g4T2KDv$cWnA!SUWU8f)GX\PpB9"
-	export DJANGO_DATABASE_URL="mysql://agenziadbadm:A3en21aW36-2022!@localhost/AgenziaWeb"
-	export DJANGO_STATIC_ROOT="/var/www/agenziaweb/static"
-	export DJANGO_MEDIA_ROOT="/var/www/agenziaweb/media"
-	export DJANGO_ALLOWED_HOSTS="localhost,127.0.0.1"
-	echo Esportate le seguenti variabili:
-	echo DJANGO_CONFIGURATION = $DJANGO_CONFIGURATION
-	echo DJANGO_SECRET_KEY = $DJANGO_SECRET_KEY
-	echo DJANGO_DATABASE_URL = $DJANGO_DATABASE_URL
-	echo DJANGO_STATIC_ROOT = $DJANGO_STATIC_ROOT
-	echo DJANGO_MEDIA_ROOT = $DJANGO_MEDIA_ROOT
-	echo DJANGO_ALLOWED_HOSTS = $DJANGO_ALLOWED_HOSTS
-
-Attiviamone l'esecuzione ed eseguiamolo
-
-	()$ chmod 700 esporta.conf
-	()$ ./esporta.conf
-
-Le informazioni finora inserite possono essere sufficienti: salviamo e chiudiamo il file.
-
-Un'altra cosa che viene tenuta, per così dire segreta da testi e dal sito (e che è costata diverse ore di tentativi durante le prove) è che sia meglio creare questi file direttamente su Linux e non da Pycharm o da un editor di Windows.
-
-Questo perchè il formato adottato da Windows termina le righe con CR+LF anzichè con il solo CR, il che comporta dei problemi di troncamento a fine riga, non da poco.
+Un'altra cosa che viene tenuta, per così dire, "segreta" da testi e dai vari forum (e che è costata diverse ore di tentativi durante le prove al sottoscritto - ndr) è che E' MOLTO OPPORTUNO CREARE IL FILE production.conf DIRETTAMENTE SU LINUX, usando ad esempio l'editor nano e NON da Pycharm o da un editor di Windows; questo perchè il formato adottato da Windows termina le righe con CR+LF anzichè con il solo CR, il che comporta dei problemi di troncamento a fine riga, non da poco.
 
 
 Modifica del file wsgi.py
@@ -368,6 +353,8 @@ La creazione del file DEVE essere effettuata stando all'interno dell'environment
 Questo output, che altro non è che l'insieme delle librerie che sono state installate nel nostro environment, lo andiamo a ridirezionare verso il file  requirements.txt ...
 
 	(a) $ pip3 freeze > requirements.txt
+
+NOTA FONDAMENTALE: se l'esportazione viene fatta all'interno di windows, il file requirements.txt sarà generato con in utf16 e non utf-8 ed inoltre i ritorni a capo saranno crlf e non cr, quindi le istruzioni di installazione SICURAMENTE non funzioneranno; il contenuto di requirements.txt dovrà pertanto essere RIGENERATO all'interno di linux (magari adottando una strategia di copia/incolla su console esterna).
 
 Quando saremo nell'ambiente "b", nel quale non sono installate dette librerie, possiamo dire a pip di leggere questo elenco e quindi procedere a scaricare ed installare le stesse librerie dell'ambiente "a", leggendolo da  requirements.txt
 
@@ -480,8 +467,6 @@ Chiaramente al termine dell'elaborazione in  /var/www/agenziaweb/static  trovere
 A questo punto è possibile, se esistenti, caricare i dati sul proprio database, ad esempio con MySQL tramite Workbench.
 
 
-
-
 Opzioni di configurazione di Gunicorn
 ------------------------------------- 
 
@@ -497,7 +482,7 @@ Per il nostro sito useremo una configurazione Gunicorn semplice, mentre si riman
 
 In linea generale per fare in modo che Gunicorn gestisca un'applicazione Django si usa un'unica riga di comando del tipo:
 
-	$ gunicorn gunicorn agenziaweb.wsgi:application
+	$ gunicorn AGENZIAW.wsgi:application
 
 Dato che Gunicorn è installato nell'ambiente virtuale, potremmo eseguire subito questo comando e avere un server WSGI in esecuzione; il problema è che si chiuderebbe subito dopo aver disconnesso la nostra sessione SSH.
 
@@ -521,7 +506,7 @@ Per impostare Gunicorn, avremo solo bisogno di scrivere un file di servizio e un
 
 Il file di servizio va salvato come ...
 
-	/etc/systemd/system/gunicorn-agenziaweb.service 
+	/etc/systemd/system/gunicorn-agenziaweb.service
 
 
 ... e conterrà il codice che andiamo a commentare:
@@ -538,7 +523,7 @@ Il file di servizio va salvato come ...
 	Group=agenziaweb
 	RuntimeDirectory=gunicorn-agenziaweb
 	WorkingDirectory=/home/agenziaweb/AGENZIAW
-	ExecStart=/home/agenziaweb/awebenv/bin/gunicorn agenziaweb.wsgi:application
+	ExecStart=/home/agenziaweb/awebenv/bin/gunicorn AGENZIAW.wsgi:application
 	ExecReload=/bin/kill -s HUP $MAINPID
 	KillMode=mixed
 	TimeoutStopSec=5
@@ -782,7 +767,11 @@ sulla macchina, come negli esempi che seguono:
 
 ... rispettivamente interromperà ed avvierà il servizio gunicorn-agenziaweb.
 
-E' importante notare che gunicorn dovrebbe essere riavviato dopo aver apportato modifiche al codice Python, usando il nome del servizio che si è creato al riavvio, nel nostro caso, gunicorn-agenziaweb; mentre nessun servizio ha bisogno di essere riavviato se si sono cambiati solo file statici o modelli.
+E' importante notare che gunicorn dovrebbe essere "ricaricato" e non riavviato dopo aver apportato modifiche al codice Python, usando il nome del servizio che si è creato al riavvio, nel nostro caso ...
+
+	$ sudo systemctl reload gunicorn-agenziaweb
+
+Nessun servizio ha bisogno di essere riavviato se si sono cambiati solo file statici o modelli.
 
 
 Applicazione delle configurazioni
@@ -901,14 +890,13 @@ La creazione del un nuovo collegamento simbolico avviene con il comando ln (link
 Abilitiamo e registriamo infine i servizi Gunicorn...
 
 	$ sudo systemctl enable --now gunicorn-agenziaweb.socket
-
+	
 	Created symlink /etc/systemd/system/sockets.target.wants/gunicorn-agenziaweb.socket 
 	B /etc/systemd/system/gunicorn-agenziaweb.socket.
 
 ... e andiamo a ricaricare NGINX per attivare la configurazione ...
 
 	$ sudo systemctl reload nginx
-
 
 Era l'ultimo passaggio. Non rimane che verificare che Agenziaweb sia attivo e funzionante sul nostro server.
 
@@ -919,4 +907,66 @@ Da un'altra postazione apriamo un browser e digitiamo il seguente indirizzo nell
 Se tutto è andato a buon fine, avremo finalmente il nostro sito in esecuzione sul browser.
 
 Oltre a verificare il corretto funzionamento del sito, è da verificare anche che il riavvio del sistema operativo faccia correttamente avviare i servizi NGINX e Gunicorn che abbiamo inserito nel restart.
+
+In ogni momento possiamo controllare lo stato (ed eventuali errori) interrogando i servizi con ...
+
+	$ sudo systemctl status nginx
+
+... e con ...
+
+	$ sudo systemctl status gunicorn-agenziaweb
+
+Mentre ricordiamo ancora che ogni volta che cambiamo qualcosa nei file del nostro sito il servizio gunicorn va ricaricato con ...
+
+	$ sudo systemctl reload gunicorn-agenziaweb
+
+
+Errata corrige del file di configurazione di nginx
+--------------------------------------------------
+
+Come è abbastanza intuitivo, i due servizi, gunicorn e nginx si muovono in modo indipendente fra loro e questo espone la pubblicazione sul sito alla possibilità concreta che non funzioni il tutto.
+
+Nello specifico, pur essendo molto valido il testo usato per la redazione di questi appunti, purtroppo il risultato della configurazione di nginx non funziona affatto, almeno su una configurazione ubuntu 18.4, mentre su un altro sistema questa configurazione ha funzionato perfettamente.
+
+Ecco di seguito la configurazione che ha funzionato:
+
+	upstream django {
+		server unix:/run/gunicorn-agenziaweb.sock fail_timeout=0;
+	}
+
+	server {
+		# Dovrebbe servire ad evitare che software malevolo esegua
+		# in modo indiscriminato codice sul nostro server.
+		listen 80 default-server;
+		return 444;
+	}	
+
+	server {
+		# Folder principale di agenziaweb su questo server
+		listen 80;
+		server_name 153.92.221.13 vpagenziaweb;
+		root	/home/agenziaweb/AGENZIAW;
+		charset	utf-8;
+		client_max_body_size 4G;
+		keepalive_timeout 5;
+
+		# Logs del nostro sito (devono esistere percorso e file)
+		access_log	/home/agenziaweb/logs/nginx-access.log;
+		error_log	/home/agenziaweb/logs/nginx-error.log;
+
+		location = /favicon.ico { access_log off; log_not_found off; }
+
+		location /media/ {
+			alias	/var/www/agenziaweb/media/;
+		}
+
+		location /static/ {
+			alias	/var/www/agenziaweb/static/;
+		}
+
+		location / {
+			include proxy_params;
+			proxy_pass http://unix:/run/gunicorn-agenziaweb.sock;
+		}
+	}
 

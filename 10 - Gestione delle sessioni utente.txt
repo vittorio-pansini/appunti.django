@@ -977,10 +977,6 @@ I prossimi passi consentiranno la creazione di un sistema di login e logout sfru
 
 Per ora ci accontenteremo di tre azioni, login, logout e register rispettivamente un form per il login nel nostro sito, un codice per realizzare il logout all'utente circa l'uscita e un form per la registrazione.
 
-Nel percorso dei template andiamo a creare una cartella che si chiamerà  accounts  allo scopo di non essere disordinati nella nostra cartella templates e all'interno andiamo ad inserire la pagina  login_page.html, copiandola dal precedente esempio (vedasi precedenti esercizi), quindi apriamo view.py ed andiamo ad inserire i seguenti import fra quelli esistenti:
-
-	from django.contrib.auth.forms import UserCreationForm
-
 Prima di realizzare il codice delle tre azioni, occupiamoci anche di integrarle con la messaggistica; può essere un ottimo alleato il sistema di messaggistica interno di Django, che useremo più avanti, descritto in ...
 
 	https://docs.djangoproject.com/en/4.0/ref/contrib/messages/
@@ -991,9 +987,9 @@ In sostanza andiamo ad importare i messaggi ...
 
 ... e saremo liberi di "sparare" nel nostro form i messaggi che vogliamo, "aggiungendoli" alla coda nella forma ...
 
-	messages.add_message(request, messages.INFO, 'Hello world.')
+	messages.add_message(request, messages.INFO, '....')
 
-... oppure nella forma più concisa ...
+... oppure nella forma più concisa, fra quelle previste ...
 
 	messages.debug(request, '%s SQL statements were executed.' % count)
 	messages.info(request, 'Three credits remain in your account.')
@@ -1007,11 +1003,11 @@ In sostanza andiamo ad importare i messaggi ...
 		<p {% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</p>
     {% endfor %}
 
-Andiamo ora a creare un percorso sotto templates che chiamiamo  accounts  e dentro questo percorso andiamo a creare due pagine html che possiamo generare vuote oppure già copiare da altri template pre-realizzati; i due teplate da creare sono:
+Nel percorso dei template andiamo a creare una cartella che si chiamerà  "accounts"  allo scopo di non essere disordinati nella nostra cartella templates e all'interno andiamo ad inserire due nuovi template html, copiandoli dal precedente esempio (vedasi precedenti esercizi), oppure copiare da altri template pre-realizzati; i due teplate da creare sono:
 
 	login_page.html				register_page.html
 
-Andiamo ora ad inserire le due voci in urls.py che ci servono a gestire le chiamate url ...
+Andiamo ora ad inserire le tre voci in urls.py che ci servono a gestire le chiamate url ...
 
 	# path('accounts/', include(('django.contrib.......
     path('login', agenziaweb.views.loginPage, name='login'),
@@ -1019,73 +1015,107 @@ Andiamo ora ad inserire le due voci in urls.py che ci servono a gestire le chiam
 										name='registration'),
     path('logout', agenziaweb.views.logoutAction, name='logout'),
 
-Un altro file che servirà al nostro scopo sarà quello di gestione dei form, cioè form.py, un file che abbiamo eventualmente già realizzato nel corso del citato capitolo 6.
+A questo punto possiamo inserire il codice che renderizza il form di LOGIN, nel nostro file view.py:
 
 	from django.contrib.auth.forms import UserCreationForm
-	from django.contrib.auth.forms import User
-	from django import forms
-
-La UserCreationForm() è una classe estremamente utile per la creazione e gestione dei form di account, la classe User ci consentirà di disporre del modello (tabella) dei dati dell'utente, mentre la classe forms, se abbiamo già implementato altri form, dovrebbe essere già presente nel nostro file di gestione (!)
-
-A questo punto possiamo inserire il codice che renderizza il form di login, nel nostro file view.py; per prima cosa agganciamo nella import la classe che abbiamo appena creato:
-
 	from django.contrib.auth import authenticate, login, logout
 	....
 	#  Login
 	def loginPage(request):
-		if request.method == 'POST':
-			nomeUtente = request.POST.get('username')
-			passwordUtente = request.POST.get('password')
-			utente = authenticate(request, 
-						username=nomeUtente, password=passwordUtente)
-			if utente is not None:
-				login(request, utente)
-				redirect('home')
-			else:
-				messages.info(request, "Nome utente o password errati")
-		context = {}
-		return render(request, "accounts/login_page.html", context)
+		if request.user.is_authenticated:
+			return redirect("home")
+		else:
+			if request.method == "POST":
+				nomeUtente = request.POST.get('username')
+				passwordUtente = request.POST.get('password')
+				utente = authenticate(request, username=nomeUtente, 
+									  password=passwordUtente)
+				if utente is not None:
+					login(request, utente)
+					return redirect("home")
+				else:
+					messages.info(request, "Nome utente o password errati")
+			context = {}
+			return render(request, "accounts/login_page.html", context)
+
+Si noti che viene evitata l'esecuzione del "vero" codice di loginPage per tutti gli utenti che si sono già eventualmente autenticati; questo per evitare che l'inserimento di un url /.../login ricarichi il login quando è già aperta una connessione; lo stesso faremo nel codice di autenticazione.
 
 La pagina login_page.html contiene un codice di un form di cui presentiamo un profilo sintetico:
 
-	
-	[codice che siamo riusciti a realizzare]
+	....
+	<form class="user" action="" method="POST" id="login-form">
+		{% csrf_token %}
+		<input type="text" class="form-group form-control-user"
+			   placeholder="Nome utente" name="username">
+		<input type="password" class="form-group form-control-user"
+			   placeholder="Password" name="password">
+		<input class="btn btn-primary btn-user btn-block" 
+				type="submit" value="Login">
+	</form>
+	{% for message in messages %}
+		<div class="text-center">{{ message }}</div>
+	{% endfor %}
+	<hr>
+	<div class="text-center small">
+	Se non hai un account, allora 
+		<a href="{% url 'registration' %}">registrati qui</a>.
+	</div>
+	....
 
+Trattasi di codice HTML "puro" dato che id e password sono letti direttamente dal codice loginPage().
 
+Ora occupiamoci della PAGINA DI REGISTRAZIONE.
 
-A questo punto abbiamo bisogno di creare un form per la registrazione degli utenti, con la classe UserCreationForm; inseriamo dunque il seguente codice, ma NON nelle view, ma nel nostro file forms.py che si trova nel percorso delle app e che abbiamo usato, per l'appunto, per gestire i form di input degli utenti:
-	
+Il primo file che servirà al nostro scopo sarà form.py, quello di gestione dei form, un file che abbiamo eventualmente già realizzato nel corso del citato capitolo 6, qui andiamo ad inserire form per la registrazione degli utenti, con la classe UserCreationForm(); quest'ultima è una classe estremamente utile per la creazione e gestione dei form di account, la classe User ci consentirà di disporre del modello (tabella) dei dati dell'utente, mentre la classe forms, se abbiamo già implementato altri form, dovrebbe essere già presente nel nostro file di gestione (!)
+
+Inseriamo dunque il seguente codice in forms.py che si trova nel percorso della app e che abbiamo già eventualmente usato, per l'appunto, per gestire i form di input degli utenti:
+
+	from django.contrib.auth.forms import UserCreationForm
+	from django.contrib.auth.forms import User
+	from django import forms
+	....
 	class FormCreaUtente(UserCreationForm):
 		class Meta:
 			model = User
 			fields = ['username', 'email', 'password1', 'password2']
 
-Questa classe va implementata nel form di registrazione utente nel file view.py come segue:
+Ora andiamo ad implementare il codice di gestione del form di registrazione come segue:
 
 	from .forms import ..., FormCreaUtente
 	....
 	#  Registrazione
 	def registrationPage(request):
-		form = FormCreaUtente()
-		if request.method == 'POST':
-			form = FormCreaUtente(request.POST)
-			if form.is_valid():
-				form.save()
-				user = form.cleaned_data.get('username')
-				messages.success(request, 
-					f"Account {user} creato con successo")
-				return redirect('login')
-		context = {'form': form}
-		return render(request, 
-					'accounts/register_page.html', context)
+		if request.user.is_authenticated:
+			return redirect("home")
+		else:
+			form = FormCreaUtente()
+			if request.method == 'POST':
+				form = FormCreaUtente(request.POST)
+				if form.is_valid():
+					form.save()
+					user = form.cleaned_data.get('username')
+					messages.success(request, f"Account {user} creato con successo")
+					return redirect("login")
+			context = {'form': form}
+			return render(request, "accounts/register_page.html", context)
 
 L'oggetto form viene istanziato tramite la classe personalizzata FormCreaUtente() importata da forms.py
 
-Infine andiamo a modificare i due templates che si occuperanno rispettivamente del login e della registrazione degli utenti.
+Infine andiamo a modificare il template che si occuperà della registrazione degli utenti:
 
-In sostanza altro non sono che dei form di tipo POST, quindi facciamo riferimento al codice che già abbiamo gestito precedentemente quando abbiamo parlato dei ModelForms: avremo la variabile {{ form }}, da noi passata all'interno di context{} e contenente i campi che ci sono all'interno della classe che genera l'oggetto, ad esempio FormCreaUtente().
+	<form method="POST" action="">
+		{% csrf_token %}
+		{% form.username.label %} 	{% form.username %} <br>
+		{% form.email.label %} 		{% form.email %} <br>
+		{% form.password1.label %} 	{% form.password1 %} <br>
+		{% form.password2.label %} 	{% form.password2 %} <br>
+		
+		<input type="submit" name="Crea utente">
+	</form>
 
-A questo punto possiamo gestire l'input nel modo che vogliamo, ad esempio sfruttando dei form già esitenti o dei template che abbiamo creato a parte gestendo cicli di {% for field in form %} oppure andando a leggere i singoli campi, ad esempio {{form.username}}, {{form.username.label}}, eccetera.
+In sostanza altro non è che un form di tipo POST, quindi facciamo riferimento al codice che già abbiamo gestito precedentemente quando abbiamo parlato dei ModelForms, con la variabile {{form}}, da noi passata all'interno di context{} e contenente i campi che ci sono all'interno della classe che genera l'oggetto, nel nostro caso FormCreaUtente().
+
+Possiamo gestire l'input nel modo che vogliamo, ad esempio sfruttando dei form già esitenti o dei template che abbiamo creato a parte gestendo cicli di {% for field in form %} oppure andando a leggere i singoli campi, ad esempio {{form.username}}, {{form.username.label}}, eccetera.
 
 Ricordiamoci che la struttura del form richiede necessariamente l'attivazione del {% csrf_token %} e di gestire gli errori autogestiti da Django nei form di registrazione e login inserendo opportunamente uno spazio dove andremo a porre il contenuto {{form.errors}}.
 
@@ -1099,8 +1129,3 @@ Naturalmente non possiamo che non occuparci del logout dell'utente, andando a re
 
 	<span>Ciao, {{request.user}} </span>
 	<span><a href="{% url 'logout' %}">logout</a></span>
-
-
-
-
-https://www.youtube.com/watch?v=tUqUdu0Sjyc
